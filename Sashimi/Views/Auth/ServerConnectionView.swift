@@ -30,6 +30,18 @@ struct ServerConnectionView: View {
             }
             
             VStack(spacing: 40) {
+                if sessionManager.logoutReason == .sessionExpired {
+                    HStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.yellow)
+                        Text("Your session has expired. Please log in again.")
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .background(Color.yellow.opacity(0.15))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+
                 TextField("Server Address (e.g., http://192.168.1.100:8096)", text: $serverAddress)
                     .textFieldStyle(.plain)
                     .padding()

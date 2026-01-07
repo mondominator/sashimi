@@ -4,12 +4,15 @@ actor JellyfinClient {
     private var serverURL: URL?
     private var accessToken: String?
     private var userId: String?
-    
+
     private let deviceId: String
     private let deviceName = "Sashimi tvOS"
     private let clientName = "Sashimi"
     private let clientVersion = "1.0.0"
-    
+
+    private let urlSession: URLSession
+    private let maxRetries = 3
+
     static let shared = JellyfinClient()
     
     private init() {
@@ -20,6 +23,13 @@ actor JellyfinClient {
             UserDefaults.standard.set(newId, forKey: "deviceId")
             self.deviceId = newId
         }
+
+        // Configure URLSession with timeouts
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 120
+        config.waitsForConnectivity = true
+        self.urlSession = URLSession(configuration: config)
     }
     
     func configure(serverURL: URL, accessToken: String? = nil, userId: String? = nil) {
@@ -57,7 +67,8 @@ actor JellyfinClient {
         path: String,
         method: String = "GET",
         queryItems: [URLQueryItem]? = nil,
-        body: Data? = nil
+        body: Data? = nil,
+        retryCount: Int = 0
     ) async throws -> Data {
         guard let serverURL else {
             throw JellyfinError.notConfigured
@@ -76,22 +87,49 @@ actor JellyfinClient {
         request.setValue(authorizationHeader, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        
+
         if let body {
             request.httpBody = body
         }
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw JellyfinError.invalidResponse
+
+        do {
+            let (data, response) = try await urlSession.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw JellyfinError.invalidResponse
+            }
+
+            // Handle 401/403 as session expiry (don't retry)
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                await SessionManager.shared.logout(reason: .sessionExpired)
+                throw JellyfinError.sessionExpired
+            }
+
+            // Retry on 5xx server errors
+            if (500...599).contains(httpResponse.statusCode) && retryCount < maxRetries {
+                let delay = pow(2.0, Double(retryCount))
+                try await Task.sleep(for: .seconds(delay))
+                return try await self.request(path: path, method: method, queryItems: queryItems, body: body, retryCount: retryCount + 1)
+            }
+
+            guard (200...299).contains(httpResponse.statusCode) else {
+                throw JellyfinError.httpError(statusCode: httpResponse.statusCode)
+            }
+
+            return data
+        } catch let error as JellyfinError {
+            throw error
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            // Retry on network errors (URLError)
+            if retryCount < maxRetries {
+                let delay = pow(2.0, Double(retryCount))
+                try await Task.sleep(for: .seconds(delay))
+                return try await self.request(path: path, method: method, queryItems: queryItems, body: body, retryCount: retryCount + 1)
+            }
+            throw JellyfinError.networkError(error)
         }
-        
-        guard (200...299).contains(httpResponse.statusCode) else {
-            throw JellyfinError.httpError(statusCode: httpResponse.statusCode)
-        }
-        
-        return data
     }
     
     func authenticate(username: String, password: String) async throws -> AuthenticationResult {
@@ -118,7 +156,7 @@ actor JellyfinClient {
             path: "/Users/\(userId)/Items/Resume",
             queryItems: [
                 URLQueryItem(name: "Limit", value: "\(limit)"),
-                URLQueryItem(name: "Fields", value: "Overview,PrimaryImageAspectRatio,CommunityRating,OfficialRating,Genres,Taglines,ParentBackdropImageTags"),
+                URLQueryItem(name: "Fields", value: "Overview,PrimaryImageAspectRatio,CommunityRating,OfficialRating,Genres,Taglines,ParentBackdropImageTags,UserData"),
                 URLQueryItem(name: "EnableImageTypes", value: "Primary,Backdrop,Thumb"),
                 URLQueryItem(name: "Recursive", value: "true")
             ]
@@ -127,20 +165,20 @@ actor JellyfinClient {
         let response = try JSONDecoder().decode(ItemsResponse.self, from: data)
         return response.items
     }
-    
+
     func getNextUp(limit: Int = 12) async throws -> [BaseItemDto] {
         guard let userId else { throw JellyfinError.notConfigured }
-        
+
         let data = try await request(
             path: "/Shows/NextUp",
             queryItems: [
                 URLQueryItem(name: "UserId", value: userId),
                 URLQueryItem(name: "Limit", value: "\(limit)"),
-                URLQueryItem(name: "Fields", value: "Overview,PrimaryImageAspectRatio,CommunityRating,OfficialRating,Genres,Taglines"),
+                URLQueryItem(name: "Fields", value: "Overview,PrimaryImageAspectRatio,CommunityRating,OfficialRating,Genres,Taglines,UserData"),
                 URLQueryItem(name: "EnableImageTypes", value: "Primary,Backdrop,Thumb")
             ]
         )
-        
+
         let response = try JSONDecoder().decode(ItemsResponse.self, from: data)
         return response.items
     }
@@ -481,6 +519,8 @@ enum JellyfinError: LocalizedError {
     case invalidURL
     case httpError(statusCode: Int)
     case decodingError
+    case sessionExpired
+    case networkError(Error)
 
     var errorDescription: String? {
         switch self {
@@ -494,6 +534,10 @@ enum JellyfinError: LocalizedError {
             return "HTTP error: \(code)"
         case .decodingError:
             return "Failed to decode response"
+        case .sessionExpired:
+            return "Your session has expired. Please log in again."
+        case .networkError:
+            return "Network connection failed. Please check your connection."
         }
     }
 }

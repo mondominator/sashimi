@@ -106,7 +106,7 @@ final class HomeViewModel: ObservableObject {
                 let items = try await client.getLatestMedia(parentId: library.id, limit: 5)
                 allHeroItems.append(contentsOf: items)
             } catch {
-                print("Failed to load hero items for library \(library.name): \(error)")
+                // Silently ignore hero items loading failures - not critical
             }
         }
 
@@ -121,14 +121,16 @@ final class HomeViewModel: ObservableObject {
     private func mergeAndSortContinueItems(resume: [BaseItemDto], nextUp: [BaseItemDto]) -> [BaseItemDto] {
         var seen = Set<String>()
         var merged: [BaseItemDto] = []
-        
+
+        // Add all resume items
         for item in resume {
             if !seen.contains(item.id) {
                 seen.insert(item.id)
                 merged.append(item)
             }
         }
-        
+
+        // Add nextUp items (avoiding duplicates by series)
         for item in nextUp {
             if let seriesId = item.seriesId {
                 if !seen.contains(seriesId) && !seen.contains(item.id) {
@@ -141,8 +143,38 @@ final class HomeViewModel: ObservableObject {
                 merged.append(item)
             }
         }
-        
-        return Array(merged.prefix(20))
+
+        // Sort by lastPlayedDate (most recent first)
+        let sorted = merged.sorted { item1, item2 in
+            let date1 = parseDate(item1.userData?.lastPlayedDate)
+            let date2 = parseDate(item2.userData?.lastPlayedDate)
+            // Items with dates come before items without dates
+            // More recent dates come first
+            switch (date1, date2) {
+            case (.some(let d1), .some(let d2)):
+                return d1 > d2
+            case (.some, .none):
+                return true
+            case (.none, .some):
+                return false
+            case (.none, .none):
+                return false
+            }
+        }
+
+        return Array(sorted.prefix(20))
+    }
+
+    private func parseDate(_ dateString: String?) -> Date? {
+        guard let dateString else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: dateString) {
+            return date
+        }
+        // Try without fractional seconds
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: dateString)
     }
     
     private func isMediaLibrary(_ library: JellyfinLibrary) -> Bool {

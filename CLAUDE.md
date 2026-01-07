@@ -50,3 +50,15 @@ xcodegen generate
 
 ### Dependencies
 - **Nuke/NukeUI**: Image loading and caching (via SPM)
+
+### YouTube Library Handling
+
+The app has special handling for YouTube content (from Pinchflat). YouTube libraries differ from regular TV shows:
+
+- **Detection**: Check `libraryName` for "youtube" (case insensitive), not `collectionType` (which is "tvshows" for both)
+- **Series images**: Have poster.jpg, banner.jpg, fanart.jpg from Pinchflat
+- **Season images**: Do NOT have images (unlike regular TV seasons)
+- **Episode images**: Have their own Primary thumbnails embedded
+- **Display preference**: Use series poster in rows, episode thumbnails only in episode detail hero
+
+When adding new views that display media items, pass `libraryName` to `MediaPosterButton` to enable proper YouTube detection. The `isYouTubeStyle` computed property handles the logic.

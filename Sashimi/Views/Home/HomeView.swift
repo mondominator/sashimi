@@ -14,9 +14,30 @@ private enum SashimiTheme {
 
 struct HomeView: View {
     @StateObject private var viewModel = HomeViewModel()
+    @StateObject private var homeSettings = HomeScreenSettings.shared
     @State private var selectedItem: BaseItemDto?
     @State private var refreshTimer: Timer?
     @State private var heroIndex: Int = 0
+    @Binding var resetTrigger: Bool
+    @Binding var isAtDefaultState: Bool
+
+    init(resetTrigger: Binding<Bool> = .constant(false), isAtDefaultState: Binding<Bool> = .constant(true)) {
+        _resetTrigger = resetTrigger
+        _isAtDefaultState = isAtDefaultState
+    }
+
+    // Order libraries according to settings
+    private var orderedLibraries: [JellyfinLibrary] {
+        let orderedIds = homeSettings.orderedLibraryIds()
+        if orderedIds.isEmpty {
+            return viewModel.libraries
+        }
+        return viewModel.libraries.sorted { lib1, lib2 in
+            let index1 = orderedIds.firstIndex(of: lib1.id) ?? Int.max
+            let index2 = orderedIds.firstIndex(of: lib2.id) ?? Int.max
+            return index1 < index2
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -28,40 +49,35 @@ struct HomeView: View {
                 )
                 .ignoresSafeArea()
 
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(alignment: .leading, spacing: 40) {
-                        if !viewModel.heroItems.isEmpty {
-                            HeroSection(
-                                items: viewModel.heroItems,
-                                currentIndex: $heroIndex,
-                                onSelect: { item in
-                                    selectedItem = item
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(alignment: .leading, spacing: 40) {
+                            // Top anchor for scroll reset
+                            Color.clear
+                                .frame(height: 1)
+                                .id("top")
+
+                            // Render rows based on settings order
+                            ForEach(homeSettings.rowConfigs) { config in
+                                if config.isVisible {
+                                    rowView(for: config)
                                 }
-                            )
+                            }
+
+                            // Bottom spacing
+                            Spacer()
+                                .frame(height: 100)
                         }
-                        
-                        if !viewModel.continueWatchingItems.isEmpty {
-                            ContinueWatchingRow(
-                                items: viewModel.continueWatchingItems,
-                                onSelect: { item in
-                                    selectedItem = item
-                                }
-                            )
-                        }
-                        
-                        ForEach(viewModel.libraries) { library in
-                            RecentlyAddedLibraryRow(library: library, onSelect: { item in
-                                selectedItem = item
-                            })
-                        }
-                        
-                        // Bottom spacing
-                        Spacer()
-                            .frame(height: 100)
                     }
-                }
-                .refreshable {
-                    await viewModel.refresh()
+                    .refreshable {
+                        await viewModel.refresh()
+                    }
+                    .onChange(of: resetTrigger) { _, _ in
+                        withAnimation {
+                            proxy.scrollTo("top", anchor: .top)
+                        }
+                        isAtDefaultState = true
+                    }
                 }
             }
             .fullScreenCover(item: $selectedItem) { item in
@@ -75,6 +91,7 @@ struct HomeView: View {
         }
         .task {
             await viewModel.loadContent()
+            homeSettings.updateWithLibraries(viewModel.libraries)
         }
         .onAppear {
             startAutoRefresh()
@@ -82,12 +99,52 @@ struct HomeView: View {
         .onDisappear {
             stopAutoRefresh()
         }
+        .onChange(of: homeSettings.needsRefresh) { _, needsRefresh in
+            if needsRefresh {
+                homeSettings.needsRefresh = false
+                Task { await viewModel.refresh() }
+            }
+        }
         .overlay {
             if viewModel.isLoading && viewModel.continueWatchingItems.isEmpty {
                 LoadingOverlay()
             }
         }
-        .focusSection()
+    }
+
+    @ViewBuilder
+    private func rowView(for config: HomeRowConfig) -> some View {
+        if let type = config.type {
+            switch type {
+            case .hero:
+                if !viewModel.heroItems.isEmpty {
+                    HeroSection(
+                        items: viewModel.heroItems,
+                        currentIndex: $heroIndex,
+                        onSelect: { item in
+                            selectedItem = item
+                        }
+                    )
+                    .focusSection()
+                }
+            case .continueWatching:
+                if !viewModel.continueWatchingItems.isEmpty {
+                    ContinueWatchingRow(
+                        items: viewModel.continueWatchingItems,
+                        onSelect: { item in
+                            selectedItem = item
+                        }
+                    )
+                    .focusSection()
+                }
+            }
+        } else if let libraryId = config.libraryId,
+                  let library = viewModel.libraries.first(where: { $0.id == libraryId }) {
+            RecentlyAddedLibraryRow(library: library, onSelect: { item in
+                selectedItem = item
+            })
+            .focusSection()
+        }
     }
     
     private func startAutoRefresh() {
@@ -352,7 +409,7 @@ struct RecentlyAddedLibraryRow: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 40) {
                         ForEach(items) { item in
-                            MediaPosterButton(item: item, libraryType: library.collectionType) {
+                            MediaPosterButton(item: item, libraryType: library.collectionType, libraryName: library.name) {
                                 onSelect(item)
                             }
                         }
@@ -368,11 +425,16 @@ struct RecentlyAddedLibraryRow: View {
     }
     
     private func loadItems() async {
+        // Skip if already loaded
+        guard items.isEmpty else { return }
+
         do {
             let latestItems = try await JellyfinClient.shared.getLatestMedia(parentId: library.id, limit: 30)
             items = deduplicateBySeries(latestItems)
+        } catch is CancellationError {
+            // Ignore cancellation errors - expected during navigation
         } catch {
-            print("Failed to load recently added items: \(error)")
+            ToastManager.shared.show("Failed to load recently added items")
         }
     }
     

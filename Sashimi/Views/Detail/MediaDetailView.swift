@@ -37,6 +37,14 @@ struct MediaDetailView: View {
 
     // Check if series has backdrop images available
     private var seriesHasBackdrop: Bool {
+        // For episodes, check parent series backdrop tags
+        if isEpisode {
+            if let tags = item.parentBackdropImageTags, !tags.isEmpty {
+                return true
+            }
+            return false
+        }
+        // For series/movies, check own backdrop tags
         if let tags = item.backdropImageTags, !tags.isEmpty {
             return true
         }
@@ -143,7 +151,7 @@ struct MediaDetailView: View {
             try await JellyfinClient.shared.deleteItem(itemId: item.id)
             dismiss()
         } catch {
-            print("Failed to delete item: \(error)")
+            ToastManager.shared.show("Failed to delete item")
         }
     }
     
@@ -155,6 +163,7 @@ struct MediaDetailView: View {
                 infoSection
             }
             .padding(.horizontal, 60)
+            .focusSection()
 
             if let overview = item.overview {
                 Text(overview)
@@ -165,43 +174,61 @@ struct MediaDetailView: View {
                     .padding(.top, 20)
                     .padding(.bottom, 40)
             }
-            
+
             if let people = item.people, !people.isEmpty {
                 castSection(people)
             }
-            
+
             if isSeries || isEpisode {
                 seasonsSection
+                    .focusSection()
             }
-            
+
             Spacer().frame(height: 80)
         }
     }
     
     // MARK: - Poster
+
     private var posterId: String {
         if isEpisode {
-            // Use series art for episodes
-            // For content without backdrops (like YouTube), use series poster
-            // For regular shows, can use season or series art
-            if seriesHasBackdrop {
-                return item.seasonId ?? item.seriesId ?? item.id
-            } else {
-                return item.seriesId ?? item.id
+            // Regular TV shows have parent backdrop images - use season poster
+            if seriesHasBackdrop, let seasonId = item.seasonId {
+                return seasonId
             }
+            // YouTube/home videos - use episode's own thumbnail
+            return item.id
+        }
+        // Video type (YouTube) - always use own thumbnail
+        if isVideo {
+            return item.id
         }
         return item.id
     }
 
+    // All possible poster IDs to try in order
+    private var posterFallbackIds: [String] {
+        var ids: [String] = []
+        if isEpisode {
+            // For episodes: try season, then episode itself, then series
+            if let seasonId = item.seasonId {
+                ids.append(seasonId)
+            }
+            ids.append(item.id)
+            if let seriesId = item.seriesId {
+                ids.append(seriesId)
+            }
+        } else {
+            ids.append(item.id)
+        }
+        return ids
+    }
+
     private var posterSection: some View {
-        AsyncItemImage(
-            itemId: posterId,
-            imageType: "Primary",
-            maxWidth: 400
-        )
-        .frame(width: 200, height: 300)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.5), radius: 20, x: 0, y: 10)
+        SmartPosterImage(itemIds: posterFallbackIds, maxWidth: 400)
+            .frame(width: 200, height: 300)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.5), radius: 20, x: 0, y: 10)
     }
     
     // MARK: - Info Section
@@ -459,7 +486,7 @@ struct MediaDetailView: View {
             }
         } catch {
             isWatched = !newState
-            print("Failed to update watched state: \(error)")
+            ToastManager.shared.show("Failed to update watched status")
         }
     }
     
@@ -474,7 +501,7 @@ struct MediaDetailView: View {
             }
         } catch {
             isFavorite = !newState
-            print("Failed to update favorite state: \(error)")
+            ToastManager.shared.show("Failed to update favorite")
         }
     }
     
@@ -484,7 +511,7 @@ struct MediaDetailView: View {
                 let series = try await JellyfinClient.shared.getItem(itemId: seriesId)
                 showingSeriesDetail = series
             } catch {
-                print("Failed to load series: \(error)")
+                ToastManager.shared.show("Failed to load series")
             }
         }
     }
@@ -556,48 +583,59 @@ struct MediaDetailView: View {
     private var seasonsSection: some View {
         let seriesId = isSeries ? item.id : item.seriesId
         
-        return VStack(alignment: .leading, spacing: 16) {
+        return VStack(alignment: .leading, spacing: 24) {
             if !seasons.isEmpty {
-                Text("Seasons")
-                    .font(.headline)
-                    .foregroundStyle(SashimiTheme.textPrimary)
-                    .padding(.horizontal, 60)
-                
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(seasons) { season in
-                            SeasonTab(
-                                season: season,
-                                isSelected: selectedSeason?.id == season.id
-                            ) {
-                                selectedSeason = season
-                                if let seriesId = seriesId {
-                                    Task { await loadEpisodesForSeason(seriesId: seriesId, season: season) }
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Seasons")
+                        .font(.headline)
+                        .foregroundStyle(SashimiTheme.textPrimary)
+                        .padding(.horizontal, 60)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(seasons) { season in
+                                SeasonTab(
+                                    season: season,
+                                    isSelected: selectedSeason?.id == season.id
+                                ) {
+                                    selectedSeason = season
+                                    if let seriesId = seriesId {
+                                        Task { await loadEpisodesForSeason(seriesId: seriesId, season: season) }
+                                    }
                                 }
                             }
                         }
+                        .padding(.horizontal, 60)
+                        .padding(.vertical, 12)
                     }
-                    .padding(.horizontal, 60)
-                    .padding(.vertical, 12)
                 }
+                .focusSection()
             }
-            
+
             if isLoadingEpisodes {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .frame(height: 200)
             } else if !episodes.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 20) {
-                        ForEach(episodes) { episode in
-                            EpisodeCard(episode: episode, isCurrentEpisode: episode.id == item.id, showEpisodeThumbnail: true) {
-                                showingEpisodeDetail = episode
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Episodes")
+                        .font(.headline)
+                        .foregroundStyle(SashimiTheme.textPrimary)
+                        .padding(.horizontal, 60)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 20) {
+                            ForEach(episodes) { episode in
+                                EpisodeCard(episode: episode, isCurrentEpisode: episode.id == item.id, showEpisodeThumbnail: true) {
+                                    showingEpisodeDetail = episode
+                                }
                             }
                         }
+                        .padding(.horizontal, 60)
+                        .padding(.vertical, 20)
                     }
-                    .padding(.horizontal, 60)
-                    .padding(.vertical, 20)
                 }
+                .focusSection()
             }
         }
     }
@@ -607,7 +645,7 @@ struct MediaDetailView: View {
         do {
             episodes = try await JellyfinClient.shared.getEpisodes(seriesId: seriesId, seasonId: season.id)
         } catch {
-            print("Failed to load episodes: \(error)")
+            ToastManager.shared.show("Failed to load episodes")
         }
         isLoadingEpisodes = false
     }
@@ -631,7 +669,7 @@ struct MediaDetailView: View {
                 await loadEpisodesForSeason(seriesId: item.id, season: firstSeason)
             }
         } catch {
-            print("Failed to load series: \(error)")
+            ToastManager.shared.show("Failed to load series content")
         }
     }
     
@@ -641,7 +679,7 @@ struct MediaDetailView: View {
         guard let seriesId = item.seriesId else { return }
         do {
             seasons = try await JellyfinClient.shared.getSeasons(seriesId: seriesId)
-            
+
             if let seasonId = item.seasonId {
                 selectedSeason = seasons.first { $0.id == seasonId }
                 let allEpisodes = try await JellyfinClient.shared.getEpisodes(seriesId: seriesId, seasonId: seasonId)
@@ -652,7 +690,7 @@ struct MediaDetailView: View {
                 await loadEpisodesForEpisodeView(seriesId: seriesId, seasonId: firstSeason.id)
             }
         } catch {
-            print("Failed to load episode content: \(error)")
+            ToastManager.shared.show("Failed to load episode content")
         }
     }
     
@@ -661,7 +699,7 @@ struct MediaDetailView: View {
         do {
             episodes = try await JellyfinClient.shared.getEpisodes(seriesId: seriesId, seasonId: seasonId)
         } catch {
-            print("Failed to load episodes: \(error)")
+            ToastManager.shared.show("Failed to load episodes")
         }
         isLoadingEpisodes = false
     }
@@ -671,7 +709,7 @@ struct MediaDetailView: View {
             let playbackInfo = try await JellyfinClient.shared.getPlaybackInfo(itemId: item.id)
             mediaInfo = playbackInfo.mediaSources?.first
         } catch {
-            print("Failed to load media info: \(error)")
+            // Silently ignore media info loading failures - not critical for playback
         }
     }
     

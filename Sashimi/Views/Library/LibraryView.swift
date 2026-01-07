@@ -39,7 +39,7 @@ struct LibraryView: View {
             let views = try await JellyfinClient.shared.getLibraryViews()
             libraries = views.map { LibraryView_Model(from: $0) }
         } catch {
-            print("Failed to load libraries: \(error)")
+            ToastManager.shared.show("Failed to load libraries")
         }
         isLoading = false
     }
@@ -135,7 +135,7 @@ struct LibraryDetailView: View {
             )
             items = response.items
         } catch {
-            print("Failed to load items: \(error)")
+            ToastManager.shared.show("Failed to load library items")
         }
         isLoading = false
     }

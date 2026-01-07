@@ -49,12 +49,29 @@ struct MediaRow: View {
 struct MediaPosterButton: View {
     let item: BaseItemDto
     var libraryType: String? = nil
+    var libraryName: String? = nil
     let onSelect: () -> Void
-    
+
     @FocusState private var isFocused: Bool
-    
-    private var isYouTube: Bool {
-        libraryType?.lowercased() == "homevideos" || libraryType?.lowercased() == "youtube"
+
+    // Detect YouTube-style content by library name or characteristics
+    private var isYouTubeStyle: Bool {
+        // Check library name for YouTube
+        if let name = libraryName?.lowercased(), name.contains("youtube") {
+            return true
+        }
+        // Check library type for homevideos
+        if libraryType?.lowercased() == "homevideos" {
+            return true
+        }
+        // For episodes without parent backdrops (legacy check)
+        if item.type == .episode {
+            let parentHasBackdrop = item.parentBackdropImageTags?.isEmpty == false
+            if !parentHasBackdrop {
+                return true
+            }
+        }
+        return false
     }
     
     private var displayTitle: String {
@@ -70,13 +87,34 @@ struct MediaPosterButton: View {
         }
     }
     
+    // Check if item has its own primary image
+    private var itemHasPrimaryImage: Bool {
+        if let tags = item.imageTags, tags["Primary"] != nil {
+            return true
+        }
+        return false
+    }
+
     private var imageId: String {
-        if item.type == .episode, let seriesId = item.seriesId {
-            return seriesId
+        if item.type == .episode || item.type == .video {
+            // For YouTube-style: use series poster (seasons don't have images)
+            if isYouTubeStyle {
+                return item.seriesId ?? item.id
+            }
+            // Use season poster for regular TV shows, fall back to series
+            return item.seasonId ?? item.seriesId ?? item.id
         }
         return item.id
     }
-    
+
+    private var fallbackImageTypes: [String] {
+        if isYouTubeStyle {
+            // YouTube-style content may have Thumb instead of Primary
+            return ["Thumb", "Backdrop"]
+        }
+        return ["Thumb"]
+    }
+
     var body: some View {
         Button(action: onSelect) {
             VStack(alignment: .leading, spacing: 14) {
@@ -84,7 +122,8 @@ struct MediaPosterButton: View {
                     AsyncItemImage(
                         itemId: imageId,
                         imageType: "Primary",
-                        maxWidth: 400
+                        maxWidth: 400,
+                        fallbackImageTypes: fallbackImageTypes
                     )
                     .frame(width: 220, height: 330)
                     .overlay(
@@ -146,7 +185,7 @@ struct MediaPosterButton: View {
                     .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(SashimiTheme.textPrimary)
                     
-                    if !isYouTube, let year = item.productionYear {
+                    if !isYouTubeStyle, let year = item.productionYear {
                         Text(String(year))
                             .font(.system(size: 16))
                             .foregroundStyle(SashimiTheme.textTertiary)

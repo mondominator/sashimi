@@ -23,6 +23,7 @@ struct SashimiApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(sessionManager)
+                .toastOverlay()
         }
     }
 }
@@ -43,28 +44,67 @@ struct ContentView: View {
 
 struct MainTabView: View {
     @EnvironmentObject private var sessionManager: SessionManager
-    
+    @State private var selectedTab = 0
+    @State private var homeViewResetTrigger = false
+    @State private var isAtDefaultState = true
+    @State private var allowExit = false
+
     var body: some View {
-        TabView {
-            HomeView()
+        TabView(selection: $selectedTab) {
+            HomeView(resetTrigger: $homeViewResetTrigger, isAtDefaultState: $isAtDefaultState)
                 .tabItem {
                     Label("Home", systemImage: "house")
                 }
-            
+                .tag(0)
+
             LibraryView()
                 .tabItem {
                     Label("Library", systemImage: "square.grid.2x2")
                 }
-            
+                .tag(1)
+
             SearchView()
                 .tabItem {
                     Label("Search", systemImage: "magnifyingglass")
                 }
-            
+                .tag(2)
+
             ProfileMenuView()
                 .tabItem {
                     Label(sessionManager.currentUser?.name ?? "Profile", systemImage: "person.circle")
                 }
+                .tag(3)
+        }
+        .ifCondition(!allowExit) { view in
+            view.onExitCommand {
+                if selectedTab != 0 {
+                    // Non-home tabs: go to home
+                    selectedTab = 0
+                } else {
+                    // Home tab: scroll to top, then allow exit on next press
+                    homeViewResetTrigger.toggle()
+                    allowExit = true
+                    // Reset after delay
+                    Task {
+                        try? await Task.sleep(for: .seconds(2))
+                        allowExit = false
+                    }
+                }
+            }
+        }
+        .onChange(of: selectedTab) { _, _ in
+            allowExit = false
+        }
+    }
+}
+
+extension View {
+    @ViewBuilder
+    func ifCondition<Content: View>(_ condition: Bool, transform: (Self) -> Content) -> some View {
+        if condition {
+            transform(self)
+        } else {
+            self
         }
     }
 }
@@ -72,7 +112,7 @@ struct MainTabView: View {
 struct ProfileMenuView: View {
     @EnvironmentObject private var sessionManager: SessionManager
     @State private var showingLogoutConfirmation = false
-    
+
     var body: some View {
         NavigationStack {
             List {
@@ -97,14 +137,14 @@ struct ProfileMenuView: View {
                                 .frame(width: 80, height: 80)
                                 .foregroundStyle(.secondary)
                         }
-                        
+
                         VStack(alignment: .leading, spacing: 6) {
                             if let userName = sessionManager.currentUser?.name {
                                 Text(userName)
                                     .font(.title3)
                                     .fontWeight(.semibold)
                             }
-                            
+
                             if let serverURL = sessionManager.serverURL {
                                 Text(serverURL.host ?? serverURL.absoluteString)
                                     .font(.subheadline)
@@ -114,18 +154,24 @@ struct ProfileMenuView: View {
                     }
                     .padding(.vertical, 8)
                 }
-                
+
+                Section("Home Screen") {
+                    NavigationLink("Row Order") {
+                        HomeScreenSettingsView()
+                    }
+                }
+
                 Section("Playback") {
                     NavigationLink("Video Quality") {
                         VideoQualitySettingsView()
                     }
                 }
-                
+
                 Section("About") {
                     LabeledContent("Version", value: "1.0.0")
                     LabeledContent("Build", value: "1")
                 }
-                
+
                 Section {
                     Button(role: .destructive) {
                         showingLogoutConfirmation = true
