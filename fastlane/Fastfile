@@ -1,0 +1,148 @@
+# Fastfile for Sashimi tvOS App
+# Documentation: https://docs.fastlane.tools
+
+default_platform(:tvos)
+
+platform :tvos do
+  # ============================================
+  # SETUP & CERTIFICATES
+  # ============================================
+
+  desc "Sync certificates and profiles from App Store Connect"
+  lane :certificates do
+    app_store_connect_api_key(
+      key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
+      issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
+      key_content: ENV["APP_STORE_CONNECT_KEY_CONTENT"],
+      is_key_content_base64: true
+    )
+
+    match(
+      type: "appstore",
+      app_identifier: ["com.sashimi.app", "com.sashimi.app.topshelf"],
+      readonly: is_ci
+    )
+  end
+
+  # ============================================
+  # BUILD
+  # ============================================
+
+  desc "Build the app"
+  lane :build do
+    # Generate Xcode project from XcodeGen
+    sh("cd .. && xcodegen generate")
+
+    build_app(
+      project: "Sashimi.xcodeproj",
+      scheme: "Sashimi",
+      destination: "generic/platform=tvOS",
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "./build",
+      output_name: "Sashimi.ipa"
+    )
+  end
+
+  # ============================================
+  # TESTFLIGHT (BETA)
+  # ============================================
+
+  desc "Push a new build to TestFlight"
+  lane :beta do
+    ensure_git_status_clean unless is_ci
+
+    # Increment build number
+    increment_build_number(
+      build_number: latest_testflight_build_number + 1
+    )
+
+    # Sync certificates
+    certificates
+
+    # Build
+    build
+
+    # Upload to TestFlight
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      changelog: changelog_from_git_commits(
+        commits_count: 10,
+        pretty: "- %s"
+      )
+    )
+
+    # Commit version bump
+    commit_version_bump(
+      message: "chore: bump build number to #{lane_context[SharedValues::BUILD_NUMBER]}"
+    ) unless is_ci
+
+    # Tag the release
+    add_git_tag(
+      tag: "v#{get_version_number}-beta.#{lane_context[SharedValues::BUILD_NUMBER]}"
+    ) unless is_ci
+  end
+
+  # ============================================
+  # APP STORE RELEASE
+  # ============================================
+
+  desc "Deploy a new version to the App Store"
+  lane :release do
+    ensure_git_status_clean unless is_ci
+
+    # Sync certificates
+    certificates
+
+    # Build
+    build
+
+    # Upload to App Store
+    upload_to_app_store(
+      skip_metadata: false,
+      skip_screenshots: true,  # Set to false when screenshots are ready
+      submit_for_review: false, # Set to true for auto-submit
+      automatic_release: false,
+      precheck_include_in_app_purchases: false
+    )
+
+    # Tag the release
+    version = get_version_number
+    add_git_tag(tag: "v#{version}") unless is_ci
+    push_git_tags unless is_ci
+  end
+
+  # ============================================
+  # UTILITIES
+  # ============================================
+
+  desc "Increment version number (patch)"
+  lane :bump_patch do
+    increment_version_number(bump_type: "patch")
+    commit_version_bump(message: "chore: bump version to #{get_version_number}")
+  end
+
+  desc "Increment version number (minor)"
+  lane :bump_minor do
+    increment_version_number(bump_type: "minor")
+    commit_version_bump(message: "chore: bump version to #{get_version_number}")
+  end
+
+  desc "Increment version number (major)"
+  lane :bump_major do
+    increment_version_number(bump_type: "major")
+    commit_version_bump(message: "chore: bump version to #{get_version_number}")
+  end
+
+  # ============================================
+  # ERROR HANDLING
+  # ============================================
+
+  error do |lane, exception|
+    # Slack notification on failure (optional)
+    # slack(
+    #   message: "Fastlane failed: #{exception.message}",
+    #   success: false
+    # )
+  end
+end

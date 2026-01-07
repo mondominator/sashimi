@@ -1,0 +1,29 @@
+Sashimi is a native tvOS client for Jellyfin media servers, bringing your personal media library to your Apple TV with a beautiful, intuitive interface.
+
+FEATURES
+
+Browse Your Library
+- Access your complete Jellyfin media collection
+- Browse movies, TV shows, and more
+- Quick search to find content instantly
+
+Seamless Playback
+- Native video playback with full Apple TV remote support
+- Resume watching from where you left off
+- Playback progress syncs with your Jellyfin server
+
+Top Shelf Integration
+- Quick access to recently watched content right from the Apple TV home screen
+- Continue watching your favorite shows with one click
+
+Beautiful Design
+- Native SwiftUI interface designed specifically for Apple TV
+- Smooth animations and transitions
+- Easy navigation with the Siri Remote
+
+REQUIREMENTS
+
+- A Jellyfin media server (self-hosted or remote)
+- tvOS 17.0 or later
+
+Sashimi is open source and community-driven. We welcome feedback and contributions!

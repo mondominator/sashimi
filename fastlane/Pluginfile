@@ -1,0 +1,6 @@
+# Fastlane Plugins
+# https://docs.fastlane.tools/plugins/available-plugins/
+
+# Uncomment plugins as needed:
+# gem 'fastlane-plugin-versioning'  # Advanced version management
+# gem 'fastlane-plugin-badge'       # Add badges to app icons

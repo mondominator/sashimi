@@ -1,0 +1,23 @@
+# Matchfile - Code signing configuration
+# https://docs.fastlane.tools/actions/match/
+
+# Git repo for storing certificates (private repo recommended)
+# git_url "git@github.com:mondominator/certificates.git"
+
+# Storage mode - git is most common, but can use google_cloud or s3
+storage_mode "git"
+
+# Type of provisioning profile
+type "appstore"
+
+# App identifiers to manage
+app_identifier ["com.sashimi.app", "com.sashimi.app.topshelf"]
+
+# Team ID
+team_id "S6WU9SVVDW"
+
+# Platform
+platform "tvos"
+
+# Username (Apple ID)
+# username "your-email@example.com"

@@ -1,0 +1,7 @@
+Initial release of Sashimi for Apple TV!
+
+- Browse your Jellyfin media library
+- Stream movies and TV shows
+- Continue watching with progress sync
+- Top Shelf integration for quick access
+- Secure credential storage
