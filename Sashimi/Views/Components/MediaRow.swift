@@ -12,17 +12,17 @@ private enum SashimiTheme {
 
 struct MediaRow: View {
     let title: String
-    var subtitle: String? = nil
+    var subtitle: String?
     let items: [BaseItemDto]
     let onSelect: (BaseItemDto) -> Void
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 40, weight: .bold))
                     .foregroundStyle(SashimiTheme.textPrimary)
-                
+
                 if let subtitle = subtitle {
                     Text(subtitle)
                         .font(.system(size: 18))
@@ -30,7 +30,7 @@ struct MediaRow: View {
                 }
             }
             .padding(.horizontal, 80)
-            
+
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 36) {
                     ForEach(items) { item in
@@ -48,8 +48,8 @@ struct MediaRow: View {
 
 struct MediaPosterButton: View {
     let item: BaseItemDto
-    var libraryType: String? = nil
-    var libraryName: String? = nil
+    var libraryType: String?
+    var libraryName: String?
     let onSelect: () -> Void
 
     @FocusState private var isFocused: Bool
@@ -73,7 +73,7 @@ struct MediaPosterButton: View {
         }
         return false
     }
-    
+
     private var displayTitle: String {
         switch item.type {
         case .movie:
@@ -86,7 +86,7 @@ struct MediaPosterButton: View {
             return item.name
         }
     }
-    
+
     // Check if item has its own primary image
     private var itemHasPrimaryImage: Bool {
         if let tags = item.imageTags, tags["Primary"] != nil {
@@ -134,7 +134,7 @@ struct MediaPosterButton: View {
                         )
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 12))
-                    
+
                     if let rating = item.communityRating, rating > 0 {
                         HStack(spacing: 4) {
                             Image("TMDBLogo")
@@ -152,7 +152,7 @@ struct MediaPosterButton: View {
                         .clipShape(Capsule())
                         .padding(10)
                     }
-                    
+
                     if item.userData?.played == true {
                         VStack {
                             HStack {
@@ -176,7 +176,7 @@ struct MediaPosterButton: View {
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(Color.white.opacity(isFocused ? 0.6 : 0), lineWidth: 2)
                 )
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     MarqueeText(
                         text: displayTitle,
@@ -184,7 +184,7 @@ struct MediaPosterButton: View {
                     )
                     .font(.system(size: 22, weight: .medium))
                     .foregroundStyle(SashimiTheme.textPrimary)
-                    
+
                     if !isYouTubeStyle, let year = item.productionYear {
                         Text(String(year))
                             .font(.system(size: 16))
@@ -211,15 +211,15 @@ struct MarqueeText: View {
     let text: String
     let isScrolling: Bool
     var height: CGFloat = 28
-    
+
     @State private var offset: CGFloat = 0
     @State private var textWidth: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
-    
+
     var body: some View {
         GeometryReader { geo in
             let needsScroll = textWidth > geo.size.width
-            
+
             Text(text)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)

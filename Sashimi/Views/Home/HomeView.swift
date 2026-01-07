@@ -146,7 +146,7 @@ struct HomeView: View {
             .focusSection()
         }
     }
-    
+
     private func startAutoRefresh() {
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
             Task {
@@ -154,7 +154,7 @@ struct HomeView: View {
             }
         }
     }
-    
+
     private func stopAutoRefresh() {
         refreshTimer?.invalidate()
         refreshTimer = nil
@@ -166,10 +166,10 @@ struct HeroSection: View {
     let items: [BaseItemDto]
     @Binding var currentIndex: Int
     let onSelect: (BaseItemDto) -> Void
-    
+
     @FocusState private var isFocused: Bool
     @State private var autoScrollTimer: Timer?
-    
+
     private var safeIndex: Int {
         guard !items.isEmpty else { return 0 }
         return min(currentIndex, items.count - 1)
@@ -213,14 +213,16 @@ struct HeroSection: View {
             }
         }
     }
-    
+
     private func stopAutoScroll() {
         autoScrollTimer?.invalidate()
         autoScrollTimer = nil
     }
-    
+
     var body: some View {
-        Button(action: { onSelect(currentItem) }) {
+        Button {
+            onSelect(currentItem)
+        } label: {
             ZStack(alignment: .bottomLeading) {
                 AsyncItemImage(
                     itemId: heroImageId,
@@ -235,7 +237,7 @@ struct HeroSection: View {
                 .background(Color.black)
                 .transition(.opacity)
                 .animation(.easeInOut(duration: 0.5), value: currentItem.id)
-                
+
                 // Gradient overlay
                 LinearGradient(
                     colors: [
@@ -247,7 +249,7 @@ struct HeroSection: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                
+
                 // Vignette sides
                 HStack {
                     LinearGradient(
@@ -258,7 +260,7 @@ struct HeroSection: View {
                     .frame(width: 300)
                     Spacer()
                 }
-                
+
                 // Content
                 VStack(alignment: .leading, spacing: 16) {
                     if let type = currentItem.type {
@@ -267,30 +269,30 @@ struct HeroSection: View {
                             .tracking(1.5)
                             .foregroundStyle(SashimiTheme.accent)
                     }
-                    
+
                     Text(currentItem.type == .episode ? (currentItem.seriesName ?? currentItem.name) : currentItem.name)
                         .font(.system(size: 48, weight: .bold))
                         .foregroundStyle(SashimiTheme.textPrimary)
                         .lineLimit(2)
                         .shadow(color: .black.opacity(0.8), radius: 8, x: 0, y: 3)
-                    
+
                     if currentItem.type == .episode {
                         Text(formatEpisodeInfo(currentItem))
                             .font(.system(size: 26, weight: .medium))
                             .foregroundStyle(SashimiTheme.textSecondary)
                     }
-                    
+
                     HStack(spacing: 14) {
                         if let year = currentItem.productionYear {
                             Text(String(year))
                                 .foregroundStyle(SashimiTheme.textSecondary)
                         }
-                        
+
                         if let runtime = currentItem.runTimeTicks {
                             Text(formatRuntime(runtime))
                                 .foregroundStyle(SashimiTheme.textSecondary)
                         }
-                        
+
                         if let rating = currentItem.communityRating {
                             HStack(spacing: 6) {
                                 Image("TMDBLogo")
@@ -303,7 +305,7 @@ struct HeroSection: View {
                         }
                     }
                     .font(.system(size: 22))
-                    
+
                     if let overview = currentItem.overview {
                         Text(overview)
                             .font(.system(size: 20))
@@ -311,7 +313,7 @@ struct HeroSection: View {
                             .lineLimit(2)
                             .frame(maxWidth: 700, alignment: .leading)
                     }
-                    
+
                     if items.count > 1 {
                         HStack(spacing: 8) {
                             ForEach(0..<items.count, id: \.self) { index in
@@ -362,7 +364,7 @@ struct HeroSection: View {
             stopAutoScroll()
         }
     }
-    
+
     private func formatRuntime(_ ticks: Int64) -> String {
         let seconds = ticks / 10_000_000
         let hours = seconds / 3600
@@ -372,7 +374,7 @@ struct HeroSection: View {
         }
         return "\(minutes)m"
     }
-    
+
     private func formatEpisodeInfo(_ item: BaseItemDto) -> String {
         let season = item.parentIndexNumber ?? 1
         let episode = item.indexNumber ?? 1
@@ -385,18 +387,18 @@ struct RecentlyAddedLibraryRow: View {
     let library: JellyfinLibrary
     let onSelect: (BaseItemDto) -> Void
     @State private var items: [BaseItemDto] = []
-    
+
     private var sectionTitle: String {
         "Recently Added \(library.name)"
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             Text(sectionTitle)
                 .font(.system(size: 40, weight: .bold))
                 .foregroundStyle(SashimiTheme.textPrimary)
                 .padding(.horizontal, 80)
-            
+
             if items.isEmpty {
                 HStack {
                     Spacer()
@@ -423,7 +425,7 @@ struct RecentlyAddedLibraryRow: View {
             await loadItems()
         }
     }
-    
+
     private func loadItems() async {
         // Skip if already loaded
         guard items.isEmpty else { return }
@@ -437,11 +439,11 @@ struct RecentlyAddedLibraryRow: View {
             ToastManager.shared.show("Failed to load recently added items")
         }
     }
-    
+
     private func deduplicateBySeries(_ items: [BaseItemDto]) -> [BaseItemDto] {
         var seen = Set<String>()
         var result: [BaseItemDto] = []
-        
+
         for item in items {
             let key = item.type == .episode ? (item.seriesId ?? item.id) : item.id
             if !seen.contains(key) {
@@ -449,7 +451,7 @@ struct RecentlyAddedLibraryRow: View {
                 result.append(item)
             }
         }
-        
+
         return Array(result.prefix(20))
     }
 }
@@ -457,18 +459,18 @@ struct RecentlyAddedLibraryRow: View {
 // MARK: - Loading Overlay
 struct LoadingOverlay: View {
     @State private var rotation: Double = 0
-    
+
     var body: some View {
         ZStack {
             SashimiTheme.background.opacity(0.9)
                 .ignoresSafeArea()
-            
+
             VStack(spacing: 24) {
                 ZStack {
                     Circle()
                         .stroke(SashimiTheme.textTertiary.opacity(0.3), lineWidth: 4)
                         .frame(width: 60, height: 60)
-                    
+
                     Circle()
                         .trim(from: 0, to: 0.3)
                         .stroke(SashimiTheme.accent, style: StrokeStyle(lineWidth: 4, lineCap: .round))
@@ -480,7 +482,7 @@ struct LoadingOverlay: View {
                             }
                         }
                 }
-                
+
                 Text("Loading your library...")
                     .font(.headline)
                     .foregroundStyle(SashimiTheme.textSecondary)

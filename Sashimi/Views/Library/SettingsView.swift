@@ -53,8 +53,8 @@ struct SettingsView: View {
 // MARK: - Home Screen Settings
 
 enum HomeRowType: String, Codable, CaseIterable {
-    case hero = "hero"
-    case continueWatching = "continueWatching"
+    case hero
+    case continueWatching
 
     var displayName: String {
         switch self {
@@ -225,7 +225,7 @@ struct HomeScreenSettingsView: View {
 
 struct VideoQualitySettingsView: View {
     @AppStorage("maxBitrate") private var maxBitrate = 20_000_000
-    
+
     let bitrateOptions = [
         (label: "Auto", value: 0),
         (label: "4K - 120 Mbps", value: 120_000_000),
@@ -235,7 +235,7 @@ struct VideoQualitySettingsView: View {
         (label: "720p - 8 Mbps", value: 8_000_000),
         (label: "480p - 3 Mbps", value: 3_000_000),
     ]
-    
+
     var body: some View {
         List {
             ForEach(bitrateOptions, id: \.value) { option in

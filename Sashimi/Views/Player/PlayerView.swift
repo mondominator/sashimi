@@ -89,7 +89,8 @@ class PlayerUIView: UIView {
     }
 
     var playerLayer: AVPlayerLayer {
-        layer as! AVPlayerLayer
+        // swiftlint:disable:next force_cast
+        layer as! AVPlayerLayer  // Safe: layerClass returns AVPlayerLayer.self
     }
 
     override static var layerClass: AnyClass {
@@ -128,7 +129,7 @@ struct ControlButton: View {
         .clipShape(Circle())
         .scaleEffect(isFocused ? 1.15 : 1.0)
         .animation(.spring(response: 0.3), value: isFocused)
-        .focusable(true) { focused in
+        .focusable(true) { _ in
             // Focus changed
         }
         .onLongPressGesture(minimumDuration: 0.01, pressing: { pressing in
@@ -178,10 +179,10 @@ struct AudioPickerSheet: View {
     var body: some View {
         NavigationStack {
             List(viewModel.audioTracks) { track in
-                Button(action: {
+                Button {
                     viewModel.selectAudioTrack(track)
                     dismiss()
-                }) {
+                } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(track.displayName)
@@ -218,10 +219,10 @@ struct SubtitlePickerSheet: View {
     var body: some View {
         NavigationStack {
             List(viewModel.subtitleTracks) { track in
-                Button(action: {
+                Button {
                     viewModel.selectSubtitleTrack(track)
                     dismiss()
-                }) {
+                } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(track.displayName)

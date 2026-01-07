@@ -2,7 +2,6 @@ import TVServices
 import Foundation
 
 class ContentProvider: TVTopShelfContentProvider {
-
     private let appGroupIdentifier = "group.com.sashimi.app"
 
     override func loadTopShelfContent() async -> TVTopShelfContent? {

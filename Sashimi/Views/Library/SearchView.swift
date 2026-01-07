@@ -1,4 +1,7 @@
 import SwiftUI
+import os
+
+private let logger = Logger(subsystem: "com.sashimi.app", category: "Search")
 
 private enum SashimiTheme {
     static let background = Color(red: 0.07, green: 0.07, blue: 0.09)
@@ -16,16 +19,18 @@ struct SearchView: View {
     @State private var isSearching = false
     @State private var selectedItem: BaseItemDto?
     @State private var searchTask: Task<Void, Never>?
-    
+
     @FocusState private var isSearchFieldFocused: Bool
-    
+
     var body: some View {
         ZStack {
             SashimiTheme.background.ignoresSafeArea()
-            
+
             VStack(spacing: 40) {
                 HStack {
-                    Button(action: { dismiss() }) {
+                    Button {
+                        dismiss()
+                    } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "chevron.left")
                                 .font(.title3)
@@ -35,21 +40,21 @@ struct SearchView: View {
                         .foregroundStyle(SashimiTheme.textSecondary)
                     }
                     .buttonStyle(.plain)
-                    
+
                     Spacer()
-                    
+
                     Text("Search")
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundStyle(SashimiTheme.textPrimary)
-                    
+
                     Spacer()
-                    
+
                     Color.clear.frame(width: 80)
                 }
                 .padding(.horizontal, 80)
                 .padding(.top, 40)
-                
+
                 TextField("Search movies, shows...", text: $searchText)
                     .textFieldStyle(.plain)
                     .font(.title3)
@@ -62,7 +67,7 @@ struct SearchView: View {
                     )
                     .focused($isSearchFieldFocused)
                     .padding(.horizontal, 80)
-                    .onChange(of: searchText) { _, newValue in
+                    .onChange(of: searchText) { _, _ in
                         searchTask?.cancel()
                         searchTask = Task {
                             try? await Task.sleep(for: .milliseconds(300))
@@ -71,7 +76,7 @@ struct SearchView: View {
                             }
                         }
                     }
-                
+
                 if isSearching {
                     Spacer()
                     ProgressView()
@@ -84,11 +89,11 @@ struct SearchView: View {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 60))
                             .foregroundStyle(SashimiTheme.textTertiary)
-                        
+
                         Text("No results found")
                             .font(.title3)
                             .foregroundStyle(SashimiTheme.textSecondary)
-                        
+
                         Text("Try a different search term")
                             .font(.body)
                             .foregroundStyle(SashimiTheme.textTertiary)
@@ -100,11 +105,11 @@ struct SearchView: View {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 60))
                             .foregroundStyle(SashimiTheme.textTertiary)
-                        
+
                         Text("Search your library")
                             .font(.title3)
                             .foregroundStyle(SashimiTheme.textSecondary)
-                        
+
                         Text("Find movies and TV shows")
                             .font(.body)
                             .foregroundStyle(SashimiTheme.textTertiary)
@@ -142,21 +147,21 @@ struct SearchView: View {
             }
         }
     }
-    
+
     private func performSearch() async {
         guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else {
             results = []
             return
         }
-        
+
         isSearching = true
-        
+
         do {
             results = try await JellyfinClient.shared.search(query: searchText)
         } catch {
-            print("Search failed: \(error)")
+            logger.error("Search failed: \(error.localizedDescription)")
         }
-        
+
         isSearching = false
     }
 }

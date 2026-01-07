@@ -30,26 +30,26 @@ final class PlayerViewModel: ObservableObject {
     @Published var selectedAudioTrackId: String?
     @Published var subtitleTracks: [SubtitleTrackOption] = []
     @Published var selectedSubtitleTrackId: String?
-    
+
     private var timeObserver: Any?
     private var progressReportTask: Task<Void, Never>?
     private var statusObserver: NSKeyValueObservation?
     private var errorObserver: NSKeyValueObservation?
     private let client = JellyfinClient.shared
-    
+
     func loadMedia(item: BaseItemDto) async {
         currentItem = item
         isLoading = true
         error = nil
         errorMessage = nil
-        
+
         do {
             let playbackInfo = try await client.getPlaybackInfo(itemId: item.id)
-            
+
             guard let mediaSource = playbackInfo.mediaSources?.first else {
                 throw PlayerError.noMediaSource
             }
-            
+
             let url: URL?
             if let transcodingPath = mediaSource.transcodingUrl, !transcodingPath.isEmpty {
                 url = await client.buildURL(path: transcodingPath)
@@ -58,7 +58,7 @@ final class PlayerViewModel: ObservableObject {
             } else {
                 url = await client.getPlaybackURL(itemId: item.id, mediaSourceId: mediaSource.id, container: mediaSource.container)
             }
-            
+
             guard let url else {
                 throw PlayerError.noStreamURL
             }
@@ -72,7 +72,7 @@ final class PlayerViewModel: ObservableObject {
 
             let asset = AVURLAsset(url: url)
             let playerItem = AVPlayerItem(asset: asset)
-            
+
             errorObserver = playerItem.observe(\.status) { [weak self] item, _ in
                 Task { @MainActor in
                     if item.status == .failed {
@@ -81,7 +81,7 @@ final class PlayerViewModel: ObservableObject {
                     }
                 }
             }
-            
+
             player = AVPlayer(playerItem: playerItem)
             player?.volume = 1.0
             player?.isMuted = false
@@ -94,16 +94,16 @@ final class PlayerViewModel: ObservableObject {
                     }
                 }
             }
-            
+
             if let startTicks = item.userData?.playbackPositionTicks, startTicks > 0 {
                 let startTime = CMTime(value: startTicks / 10000, timescale: 1000)
                 await player?.seek(to: startTime)
             }
-            
+
             try? await client.reportPlaybackStart(itemId: item.id, positionTicks: item.userData?.playbackPositionTicks ?? 0)
-            
+
             startProgressReporting()
-            
+
             isLoading = false
             player?.play()
         } catch {
@@ -112,7 +112,7 @@ final class PlayerViewModel: ObservableObject {
             isLoading = false
         }
     }
-    
+
     private func startProgressReporting() {
         progressReportTask?.cancel()
         progressReportTask = Task {
@@ -122,33 +122,33 @@ final class PlayerViewModel: ObservableObject {
             }
         }
     }
-    
+
     private func reportProgress() async {
         guard let item = currentItem,
               let player,
               let currentTime = player.currentItem?.currentTime() else { return }
-        
+
         let positionTicks = Int64(currentTime.seconds * 10_000_000)
         let isPaused = player.timeControlStatus == .paused
-        
+
         try? await client.reportPlaybackProgress(itemId: item.id, positionTicks: positionTicks, isPaused: isPaused)
     }
-    
+
     func stop() async {
         progressReportTask?.cancel()
-        
+
         if let item = currentItem,
            let player,
            let currentTime = player.currentItem?.currentTime() {
             let positionTicks = Int64(currentTime.seconds * 10_000_000)
             try? await client.reportPlaybackStopped(itemId: item.id, positionTicks: positionTicks)
         }
-        
+
         player?.pause()
         player = nil
         currentItem = nil
     }
-    
+
     func loadAudioTracks() {
         guard let playerItem = player?.currentItem else { return }
 
@@ -179,7 +179,7 @@ final class PlayerViewModel: ObservableObject {
             selectedAudioTrackId = "\(currentIndex)"
         }
     }
-    
+
     func selectAudioTrack(_ track: AudioTrackOption) {
         guard let playerItem = player?.currentItem,
               let audioGroup = playerItem.asset.mediaSelectionGroup(forMediaCharacteristic: .audible),
@@ -261,7 +261,7 @@ final class PlayerViewModel: ObservableObject {
 enum PlayerError: LocalizedError {
     case noMediaSource
     case noStreamURL
-    
+
     var errorDescription: String? {
         switch self {
         case .noMediaSource:

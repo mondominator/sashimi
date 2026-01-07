@@ -1,5 +1,9 @@
 import SwiftUI
 
+// swiftlint:disable type_body_length file_length
+// MediaDetailView is a complex view handling movies, series, seasons, and episodes
+// with multiple states and sub-views - splitting would reduce cohesion
+
 private enum SashimiTheme {
     static let background = Color(red: 0.07, green: 0.07, blue: 0.09)
     static let cardBackground = Color(white: 0.12)
@@ -30,7 +34,7 @@ struct MediaDetailView: View {
     @State private var showingFileInfo = false
     @State private var showingDeleteConfirm = false
     @FocusState private var isMoreButtonFocused: Bool
-    
+
     private var isSeries: Bool { item.type == .series }
     private var isEpisode: Bool { item.type == .episode }
     private var isVideo: Bool { item.type == .video }
@@ -69,7 +73,7 @@ struct MediaDetailView: View {
         }
         return "Backdrop"
     }
-    
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -154,7 +158,7 @@ struct MediaDetailView: View {
             ToastManager.shared.show("Failed to delete item")
         }
     }
-    
+
     // MARK: - Main Content
     private var mainContentSection: some View {
         VStack(alignment: .leading, spacing: 30) {
@@ -187,7 +191,7 @@ struct MediaDetailView: View {
             Spacer().frame(height: 80)
         }
     }
-    
+
     // MARK: - Poster
 
     private var posterId: String {
@@ -230,7 +234,7 @@ struct MediaDetailView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .shadow(color: .black.opacity(0.5), radius: 20, x: 0, y: 10)
     }
-    
+
     // MARK: - Info Section
     private var infoSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -355,7 +359,7 @@ struct MediaDetailView: View {
         default: return "\(channels)ch"
         }
     }
-    
+
     private var metadataLabel: String {
         var parts: [String] = []
 
@@ -381,7 +385,7 @@ struct MediaDetailView: View {
 
         return parts.joined(separator: " • ")
     }
-    
+
     private var ratingsRow: some View {
         HStack(spacing: 20) {
             if let rating = item.communityRating, rating > 0 {
@@ -407,7 +411,7 @@ struct MediaDetailView: View {
         .font(.subheadline)
         .foregroundStyle(SashimiTheme.textPrimary)
     }
-    
+
     // MARK: - Action Buttons
     private var actionButtonsRow: some View {
         HStack(spacing: 16) {
@@ -436,17 +440,23 @@ struct MediaDetailView: View {
             }
 
             Menu {
-                Button(action: { showingFileInfo = true }) {
+                Button {
+                    showingFileInfo = true
+                } label: {
                     Label("File Info", systemImage: "info.circle")
                 }
 
                 if isEpisode, let seriesId = item.seriesId {
-                    Button(action: { navigateToSeries(seriesId: seriesId) }) {
+                    Button {
+                        navigateToSeries(seriesId: seriesId)
+                    } label: {
                         Label("Go to Series", systemImage: "tv")
                     }
                 }
 
-                Button(role: .destructive, action: { showingDeleteConfirm = true }) {
+                Button(role: .destructive) {
+                    showingDeleteConfirm = true
+                } label: {
                     Label("Delete", systemImage: "trash")
                 }
             } label: {
@@ -474,7 +484,7 @@ struct MediaDetailView: View {
             Spacer()
         }
     }
-    
+
     private func toggleWatched() async {
         let newState = !isWatched
         isWatched = newState
@@ -489,7 +499,7 @@ struct MediaDetailView: View {
             ToastManager.shared.show("Failed to update watched status")
         }
     }
-    
+
     private func toggleFavorite() async {
         let newState = !isFavorite
         isFavorite = newState
@@ -504,7 +514,7 @@ struct MediaDetailView: View {
             ToastManager.shared.show("Failed to update favorite")
         }
     }
-    
+
     private func navigateToSeries(seriesId: String) {
         Task {
             do {
@@ -515,7 +525,7 @@ struct MediaDetailView: View {
             }
         }
     }
-    
+
     // MARK: - Media Info
     private func mediaInfoSection(_ info: MediaSourceInfo) -> some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -523,26 +533,26 @@ struct MediaDetailView: View {
                 if let container = info.container {
                     mediaInfoPill(icon: "doc", text: container.uppercased())
                 }
-                
+
                 if let videoCodec = info.videoCodec {
                     mediaInfoPill(icon: "film", text: videoCodec.uppercased())
                 }
-                
+
                 if let resolution = info.videoResolution {
                     mediaInfoPill(icon: "rectangle.on.rectangle", text: resolution)
                 }
-                
+
                 if let audioCodec = info.audioCodec {
                     mediaInfoPill(icon: "speaker.wave.2", text: audioCodec.uppercased())
                 }
-                
+
                 if let channels = info.audioChannels {
                     mediaInfoPill(icon: "speaker.wave.3", text: "\(channels) CH")
                 }
             }
         }
     }
-    
+
     private func mediaInfoPill(icon: String, text: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
@@ -557,17 +567,17 @@ struct MediaDetailView: View {
         .background(SashimiTheme.cardBackground)
         .clipShape(Capsule())
     }
-    
+
     // MARK: - Cast
     private func castSection(_ people: [PersonInfo]) -> some View {
         let cast = Array(people.filter { $0.type == "Actor" }.prefix(12))
-        
+
         return VStack(alignment: .leading, spacing: 16) {
             Text("Cast")
                 .font(.headline)
                 .foregroundStyle(SashimiTheme.textPrimary)
                 .padding(.horizontal, 60)
-            
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 20) {
                     ForEach(cast) { person in
@@ -578,11 +588,11 @@ struct MediaDetailView: View {
             }
         }
     }
-    
+
     // MARK: - Seasons Section
     private var seasonsSection: some View {
         let seriesId = isSeries ? item.id : item.seriesId
-        
+
         return VStack(alignment: .leading, spacing: 24) {
             if !seasons.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
@@ -639,7 +649,7 @@ struct MediaDetailView: View {
             }
         }
     }
-    
+
     private func loadEpisodesForSeason(seriesId: String, season: BaseItemDto) async {
         isLoadingEpisodes = true
         do {
@@ -649,8 +659,7 @@ struct MediaDetailView: View {
         }
         isLoadingEpisodes = false
     }
-    
-    
+
     // MARK: - Data Loading
     private func loadContent() async {
         if isSeries {
@@ -660,7 +669,7 @@ struct MediaDetailView: View {
         }
         await loadMediaInfo()
     }
-    
+
     private func loadSeriesContent() async {
         do {
             seasons = try await JellyfinClient.shared.getSeasons(seriesId: item.id)
@@ -672,9 +681,7 @@ struct MediaDetailView: View {
             ToastManager.shared.show("Failed to load series content")
         }
     }
-    
 
-    
     private func loadEpisodeContent() async {
         guard let seriesId = item.seriesId else { return }
         do {
@@ -693,7 +700,7 @@ struct MediaDetailView: View {
             ToastManager.shared.show("Failed to load episode content")
         }
     }
-    
+
     private func loadEpisodesForEpisodeView(seriesId: String, seasonId: String) async {
         isLoadingEpisodes = true
         do {
@@ -703,7 +710,7 @@ struct MediaDetailView: View {
         }
         isLoadingEpisodes = false
     }
-    
+
     private func loadMediaInfo() async {
         do {
             let playbackInfo = try await JellyfinClient.shared.getPlaybackInfo(itemId: item.id)
@@ -712,7 +719,7 @@ struct MediaDetailView: View {
             // Silently ignore media info loading failures - not critical for playback
         }
     }
-    
+
     private func formatRuntime(_ ticks: Int64) -> String {
         let seconds = ticks / 10_000_000
         let hours = seconds / 3600
@@ -729,9 +736,9 @@ struct ActionButton: View {
     var isPrimary: Bool = false
     var isActive: Bool = false
     let action: () -> Void
-    
+
     @FocusState private var isFocused: Bool
-    
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
@@ -792,7 +799,7 @@ struct SeasonTab: View {
 
 struct CastCard: View {
     let person: PersonInfo
-    
+
     var body: some View {
         VStack(spacing: 8) {
             if person.primaryImageTag != nil {
@@ -812,13 +819,13 @@ struct CastCard: View {
                             .foregroundStyle(SashimiTheme.textTertiary)
                     }
             }
-            
+
             Text(person.name)
                 .font(.caption)
                 .fontWeight(.medium)
                 .foregroundStyle(.white)
                 .lineLimit(1)
-            
+
             if let role = person.role, !role.isEmpty {
                 Text(role)
                     .font(.caption2)
@@ -869,7 +876,7 @@ struct EpisodeCard: View {
                         .frame(width: 150, height: 225)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
-                    
+
                     if episode.progressPercent > 0 {
                         GeometryReader { geo in
                             VStack {

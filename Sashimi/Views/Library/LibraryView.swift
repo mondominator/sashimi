@@ -4,7 +4,7 @@ struct LibraryView: View {
     @State private var libraries: [LibraryView_Model] = []
     @State private var selectedLibrary: LibraryView_Model?
     @State private var isLoading = true
-    
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -33,7 +33,7 @@ struct LibraryView: View {
             await loadLibraries()
         }
     }
-    
+
     private func loadLibraries() async {
         do {
             let views = try await JellyfinClient.shared.getLibraryViews()
@@ -49,7 +49,7 @@ struct LibraryView_Model: Identifiable, Hashable {
     let id: String
     let name: String
     let collectionType: String?
-    
+
     init(from library: JellyfinLibrary) {
         self.id = library.id
         self.name = library.name
@@ -59,7 +59,7 @@ struct LibraryView_Model: Identifiable, Hashable {
 
 struct LibraryCard: View {
     let library: LibraryView_Model
-    
+
     var body: some View {
         VStack {
             AsyncItemImage(
@@ -72,7 +72,7 @@ struct LibraryCard: View {
             .overlay {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(.black.opacity(0.4))
-                
+
                 Text(library.name)
                     .font(.title3)
                     .fontWeight(.semibold)
@@ -83,11 +83,11 @@ struct LibraryCard: View {
 
 struct LibraryDetailView: View {
     let library: LibraryView_Model
-    
+
     @State private var items: [BaseItemDto] = []
     @State private var isLoading = true
     @State private var selectedItem: BaseItemDto?
-    
+
     var body: some View {
         ScrollView {
             if isLoading {
@@ -118,15 +118,15 @@ struct LibraryDetailView: View {
             }
         }
     }
-    
+
     private func loadItems() async {
         do {
             let includeTypes: [ItemType]? = switch library.collectionType {
-                case "tvshows": [.series]
-                case "movies": [.movie]
-                default: nil
+            case "tvshows": [.series]
+            case "movies": [.movie]
+            default: nil
             }
-            
+
             let response = try await JellyfinClient.shared.getItems(
                 parentId: library.id,
                 includeTypes: includeTypes,

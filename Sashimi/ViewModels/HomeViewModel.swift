@@ -113,21 +113,19 @@ final class HomeViewModel: ObservableObject {
         // Shuffle the combined items
         heroItems = allHeroItems.shuffled()
     }
-    
+
     func refresh() async {
         await loadContent()
     }
-    
+
     private func mergeAndSortContinueItems(resume: [BaseItemDto], nextUp: [BaseItemDto]) -> [BaseItemDto] {
         var seen = Set<String>()
         var merged: [BaseItemDto] = []
 
         // Add all resume items
-        for item in resume {
-            if !seen.contains(item.id) {
-                seen.insert(item.id)
-                merged.append(item)
-            }
+        for item in resume where !seen.contains(item.id) {
+            seen.insert(item.id)
+            merged.append(item)
         }
 
         // Add nextUp items (avoiding duplicates by series)
@@ -176,7 +174,7 @@ final class HomeViewModel: ObservableObject {
         formatter.formatOptions = [.withInternetDateTime]
         return formatter.date(from: dateString)
     }
-    
+
     private func isMediaLibrary(_ library: JellyfinLibrary) -> Bool {
         guard let collectionType = library.collectionType?.lowercased() else { return true }
         return ["movies", "tvshows", "music", "mixed", "homevideos"].contains(collectionType)

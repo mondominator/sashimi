@@ -14,17 +14,17 @@ final class SessionManager: ObservableObject {
     @Published private(set) var currentUser: UserDto?
     @Published private(set) var serverURL: URL?
     @Published var logoutReason: LogoutReason?
-    
+
     private let userDefaultsServerURLKey = "serverURL"
     private let userDefaultsUserIdKey = "userId"
     private let keychainAccessTokenKey = "accessToken"
-    
+
     private init() {
         Task {
             await restoreSession()
         }
     }
-    
+
     func restoreSession() async {
         guard let urlString = UserDefaults.standard.string(forKey: userDefaultsServerURLKey),
               let url = URL(string: urlString),
@@ -44,7 +44,7 @@ final class SessionManager: ObservableObject {
         self.currentUser = UserDto(id: userId, name: UserDefaults.standard.string(forKey: "userName") ?? "User", serverID: nil, primaryImageTag: nil)
         self.isAuthenticated = true
     }
-    
+
     func login(serverURL: URL, username: String, password: String) async throws {
         await JellyfinClient.shared.configure(serverURL: serverURL)
 
@@ -60,7 +60,7 @@ final class SessionManager: ObservableObject {
         self.logoutReason = nil
         self.isAuthenticated = true
     }
-    
+
     func logout(reason: LogoutReason = .userInitiated) {
         UserDefaults.standard.removeObject(forKey: userDefaultsServerURLKey)
         UserDefaults.standard.removeObject(forKey: userDefaultsUserIdKey)

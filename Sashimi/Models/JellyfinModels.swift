@@ -1,5 +1,8 @@
 import Foundation
 
+// swiftlint:disable discouraged_optional_boolean
+// Jellyfin API models use optional booleans - this matches the server response structure
+
 struct ServerConfiguration: Codable {
     var serverURL: URL
     var accessToken: String?
@@ -11,7 +14,7 @@ struct AuthenticationResult: Codable {
     let user: UserDto
     let accessToken: String
     let serverId: String
-    
+
     enum CodingKeys: String, CodingKey {
         case user = "User"
         case accessToken = "AccessToken"
@@ -24,7 +27,7 @@ struct UserDto: Codable, Identifiable {
     let name: String
     let serverID: String?
     let primaryImageTag: String?
-    
+
     enum CodingKeys: String, CodingKey {
         case id = "Id"
         case name = "Name"
@@ -58,7 +61,7 @@ struct BaseItemDto: Codable, Identifiable, Hashable {
     let people: [PersonInfo]?
     let criticRating: Int?
     let premiereDate: String?
-    
+
     enum CodingKeys: String, CodingKey {
         case id = "Id"
         case name = "Name"
@@ -85,15 +88,15 @@ struct BaseItemDto: Codable, Identifiable, Hashable {
         case criticRating = "CriticRating"
         case premiereDate = "PremiereDate"
     }
-    
+
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
-    
+
     static func == (lhs: BaseItemDto, rhs: BaseItemDto) -> Bool {
         lhs.id == rhs.id
     }
-    
+
     var displayTitle: String {
         if type == .episode, let seriesName = seriesName {
             let seasonEp = [parentIndexNumber, indexNumber]
@@ -105,7 +108,7 @@ struct BaseItemDto: Codable, Identifiable, Hashable {
         }
         return name
     }
-    
+
     var progressPercent: Double {
         guard let playbackTicks = userData?.playbackPositionTicks,
               let totalTicks = runTimeTicks,
@@ -124,7 +127,7 @@ enum ItemType: String, Codable {
     case folder = "Folder"
     case collectionFolder = "CollectionFolder"
     case unknown
-    
+
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let rawValue = try container.decode(String.self)
@@ -138,7 +141,7 @@ struct UserItemDataDto: Codable {
     let isFavorite: Bool?
     let played: Bool?
     let lastPlayedDate: String?
-    
+
     enum CodingKeys: String, CodingKey {
         case playbackPositionTicks = "PlaybackPositionTicks"
         case playCount = "PlayCount"
@@ -151,7 +154,7 @@ struct UserItemDataDto: Codable {
 struct ItemsResponse: Codable {
     let items: [BaseItemDto]
     let totalRecordCount: Int
-    
+
     enum CodingKeys: String, CodingKey {
         case items = "Items"
         case totalRecordCount = "TotalRecordCount"
@@ -161,7 +164,7 @@ struct ItemsResponse: Codable {
 struct PlaybackInfoResponse: Codable {
     let mediaSources: [MediaSourceInfo]?
     let playSessionId: String?
-    
+
     enum CodingKeys: String, CodingKey {
         case mediaSources = "MediaSources"
         case playSessionId = "PlaySessionId"
@@ -178,11 +181,11 @@ struct MediaSourceInfo: Codable {
     let transcodingUrl: String?
     let directStreamUrl: String?
     let mediaStreams: [MediaStream]?
-    
+
     var videoCodec: String? {
         mediaStreams?.first(where: { $0.type == "Video" })?.codec
     }
-    
+
     var videoResolution: String? {
         guard let stream = mediaStreams?.first(where: { $0.type == "Video" }),
               let height = stream.height else { return nil }
@@ -191,19 +194,19 @@ struct MediaSourceInfo: Codable {
         if height >= 720 { return "720p" }
         return "\(height)p"
     }
-    
+
     var audioCodec: String? {
         mediaStreams?.first(where: { $0.type == "Audio" })?.codec
     }
-    
+
     var audioChannels: Int? {
         mediaStreams?.first(where: { $0.type == "Audio" })?.channels
     }
-    
+
     var subtitleStreams: [MediaStream] {
         mediaStreams?.filter { $0.type == "Subtitle" } ?? []
     }
-    
+
     enum CodingKeys: String, CodingKey {
         case id = "Id"
         case path = "Path"
@@ -229,7 +232,7 @@ struct MediaStream: Codable {
     let index: Int?
     let isDefault: Bool?
     let isExternal: Bool?
-    
+
     enum CodingKeys: String, CodingKey {
         case type = "Type"
         case codec = "Codec"
@@ -251,7 +254,7 @@ struct PersonInfo: Codable, Identifiable, Hashable {
     let role: String?
     let type: String?
     let primaryImageTag: String?
-    
+
     enum CodingKeys: String, CodingKey {
         case id = "Id"
         case name = "Name"
@@ -266,7 +269,7 @@ struct JellyfinLibrary: Codable, Identifiable {
     let name: String
     let collectionType: String?
     let imageTags: [String: String]?
-    
+
     enum CodingKeys: String, CodingKey {
         case id = "Id"
         case name = "Name"
@@ -277,7 +280,7 @@ struct JellyfinLibrary: Codable, Identifiable {
 
 struct LibraryViewsResponse: Codable {
     let items: [JellyfinLibrary]
-    
+
     enum CodingKeys: String, CodingKey {
         case items = "Items"
     }

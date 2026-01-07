@@ -14,20 +14,20 @@ private enum SashimiTheme {
 struct ContinueWatchingRow: View {
     let items: [BaseItemDto]
     let onSelect: (BaseItemDto) -> Void
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .lastTextBaseline, spacing: 12) {
                 Text("Continue Watching")
                     .font(.system(size: 40, weight: .bold))
                     .foregroundStyle(SashimiTheme.textPrimary)
-                
+
                 Image(systemName: "play.circle.fill")
                     .font(.system(size: 38))
                     .foregroundStyle(SashimiTheme.accent)
             }
             .padding(.horizontal, 80)
-            
+
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 40) {
                     ForEach(items) { item in
@@ -46,9 +46,9 @@ struct ContinueWatchingRow: View {
 struct ContinueWatchingCard: View {
     let item: BaseItemDto
     let onSelect: () -> Void
-    
+
     @FocusState private var isFocused: Bool
-    
+
     // Check if parent series has backdrop images (regular shows have it, YouTube doesn't)
     private var seriesHasBackdrop: Bool {
         if let tags = item.parentBackdropImageTags, !tags.isEmpty {
@@ -76,7 +76,7 @@ struct ContinueWatchingCard: View {
             return "Backdrop"
         }
     }
-    
+
     private var displayTitle: String {
         switch item.type {
         case .movie, .video:
@@ -95,7 +95,7 @@ struct ContinueWatchingCard: View {
         let episode = item.indexNumber ?? 1
         return "S\(season):E\(episode) - \(item.name)"
     }
-    
+
     var body: some View {
         Button(action: onSelect) {
             VStack(alignment: .leading, spacing: 14) {
@@ -114,19 +114,19 @@ struct ContinueWatchingCard: View {
                         )
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 16))
-                    
+
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 10) {
                             Image(systemName: "play.fill")
                                 .font(.caption)
                                 .foregroundStyle(SashimiTheme.accent)
-                            
+
                             Text(formatRemainingTime())
                                 .font(.caption)
                                 .fontWeight(.medium)
                                 .foregroundStyle(SashimiTheme.textSecondary)
                         }
-                        
+
                         ContinueProgressBar(progress: item.progressPercent)
                             .frame(height: 5)
                     }
@@ -139,7 +139,7 @@ struct ContinueWatchingCard: View {
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(Color.white.opacity(isFocused ? 0.6 : 0), lineWidth: 2)
                 )
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     MarqueeText(
                         text: displayTitle,
@@ -168,7 +168,7 @@ struct ContinueWatchingCard: View {
         .buttonStyle(PlainNoHighlightButtonStyle())
         .focused($isFocused)
     }
-    
+
     private func formatRemainingTime() -> String {
         guard let total = item.runTimeTicks else { return "" }
         let played = item.userData?.playbackPositionTicks ?? 0
@@ -176,7 +176,7 @@ struct ContinueWatchingCard: View {
         let seconds = remaining / 10_000_000
         let hours = seconds / 3600
         let minutes = (seconds % 3600) / 60
-        
+
         if hours > 0 {
             return "\(hours)h \(minutes)m left"
         }
@@ -186,13 +186,13 @@ struct ContinueWatchingCard: View {
 
 struct ContinueProgressBar: View {
     let progress: Double
-    
+
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 3)
                     .fill(SashimiTheme.progressBackground)
-                
+
                 RoundedRectangle(cornerRadius: 3)
                     .fill(
                         LinearGradient(

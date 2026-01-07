@@ -1,5 +1,8 @@
 import SwiftUI
 import AVFoundation
+import os
+
+private let logger = Logger(subsystem: "com.sashimi.app", category: "App")
 
 @main
 struct SashimiApp: App {
@@ -15,7 +18,7 @@ struct SashimiApp: App {
             try audioSession.setCategory(.playback, mode: .moviePlayback)
             try audioSession.setActive(true)
         } catch {
-            print("Failed to configure audio session: \(error)")
+            logger.error("Failed to configure audio session: \(error.localizedDescription)")
         }
     }
 
@@ -30,7 +33,7 @@ struct SashimiApp: App {
 
 struct ContentView: View {
     @EnvironmentObject private var sessionManager: SessionManager
-    
+
     var body: some View {
         Group {
             if sessionManager.isAuthenticated {
