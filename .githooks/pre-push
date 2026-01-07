@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# Pre-push hook for Sashimi
+# Prevents direct pushes to protected branches
+
+PROTECTED_BRANCHES="^(main|master|release/.*)$"
+
+current_branch=$(git symbolic-ref HEAD | sed -e 's,.*/\(.*\),\1,')
+
+if echo "$current_branch" | grep -qE "$PROTECTED_BRANCHES"; then
+    read -r local_ref local_sha remote_ref remote_sha
+
+    # Allow if pushing to create a new branch (not updating existing)
+    if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+        exit 0
+    fi
+
+    echo ""
+    echo "WARNING: You are pushing directly to '$current_branch'."
+    echo ""
+    echo "This is generally discouraged. Please consider:"
+    echo "  1. Creating a feature branch"
+    echo "  2. Opening a Pull Request"
+    echo "  3. Getting code review"
+    echo ""
+    echo "If you really need to push directly, use: git push --no-verify"
+    echo ""
+
+    # In strict mode, uncomment the following to block:
+    # exit 1
+fi
+
+exit 0

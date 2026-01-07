@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build tvOS App
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16.0'
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: Cache SPM Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Resolve Dependencies
+        run: xcodebuild -resolvePackageDependencies -project Sashimi.xcodeproj -scheme Sashimi
+
+      - name: Build for tvOS Simulator
+        run: |
+          xcodebuild build \
+            -project Sashimi.xcodeproj \
+            -scheme Sashimi \
+            -destination 'platform=tvOS Simulator,name=Apple TV' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty --color
+
+      - name: Build for tvOS Device (Release)
+        run: |
+          xcodebuild build \
+            -project Sashimi.xcodeproj \
+            -scheme Sashimi \
+            -destination 'generic/platform=tvOS' \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty --color
+
+  swiftlint:
+    name: SwiftLint
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run SwiftLint
+        run: |
+          brew install swiftlint
+          swiftlint lint --reporter github-actions-logging

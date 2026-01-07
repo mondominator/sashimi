@@ -1,0 +1,46 @@
+#!/bin/bash
+
+# Pre-commit hook for Sashimi
+# Runs SwiftLint on staged Swift files
+
+echo "Running pre-commit checks..."
+
+# Check if swiftlint is installed
+if ! command -v swiftlint &> /dev/null; then
+    echo "Warning: SwiftLint is not installed. Skipping lint check."
+    echo "Install with: brew install swiftlint"
+    exit 0
+fi
+
+# Get staged Swift files
+STAGED_SWIFT_FILES=$(git diff --cached --name-only --diff-filter=d | grep -E '\.swift$')
+
+if [ -z "$STAGED_SWIFT_FILES" ]; then
+    echo "No Swift files staged. Skipping SwiftLint."
+    exit 0
+fi
+
+echo "Linting staged Swift files..."
+
+# Run SwiftLint on staged files
+echo "$STAGED_SWIFT_FILES" | while read -r file; do
+    if [ -f "$file" ]; then
+        swiftlint lint --quiet --path "$file"
+        RESULT=$?
+        if [ $RESULT -ne 0 ]; then
+            echo "SwiftLint found issues in: $file"
+            exit 1
+        fi
+    fi
+done
+
+# Check the exit status
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "Commit aborted due to SwiftLint errors."
+    echo "Fix the issues above or use --no-verify to skip (not recommended)."
+    exit 1
+fi
+
+echo "Pre-commit checks passed!"
+exit 0

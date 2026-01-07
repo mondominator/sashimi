@@ -27,7 +27,7 @@ build/
 # Swift Package Manager
 .build/
 .swiftpm/
-Package.resolved
+# Note: Package.resolved is committed for reproducible builds
 
 # CocoaPods
 Pods/
