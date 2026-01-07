@@ -19,6 +19,10 @@ jobs:
         with:
           xcode-version: '16.0'
 
+      - name: Install tvOS Platform
+        run: |
+          xcodebuild -downloadPlatform tvOS
+
       - name: Install XcodeGen
         run: brew install xcodegen
 
@@ -30,7 +34,7 @@ jobs:
           xcodebuild archive \
             -project Sashimi.xcodeproj \
             -scheme Sashimi \
-            -destination 'generic/platform=tvOS' \
+            -sdk appletvos \
             -archivePath build/Sashimi.xcarchive \
             CODE_SIGNING_ALLOWED=NO
 

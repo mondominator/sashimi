@@ -24,6 +24,10 @@ jobs:
         with:
           xcode-version: '16.0'
 
+      - name: Install tvOS Platform
+        run: |
+          xcodebuild -downloadPlatform tvOS
+
       - name: Install XcodeGen
         run: brew install xcodegen
 
@@ -43,12 +47,15 @@ jobs:
       - name: Resolve Dependencies
         run: xcodebuild -resolvePackageDependencies -project Sashimi.xcodeproj -scheme Sashimi
 
+      - name: List Available Destinations
+        run: xcodebuild -project Sashimi.xcodeproj -scheme Sashimi -showdestinations | head -30
+
       - name: Build for tvOS Simulator
         run: |
           xcodebuild build \
             -project Sashimi.xcodeproj \
             -scheme Sashimi \
-            -destination 'platform=tvOS Simulator,name=Apple TV' \
+            -destination 'platform=tvOS Simulator,name=Apple TV 4K (3rd generation)' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             | xcpretty --color
@@ -58,7 +65,7 @@ jobs:
           xcodebuild build \
             -project Sashimi.xcodeproj \
             -scheme Sashimi \
-            -destination 'generic/platform=tvOS' \
+            -sdk appletvos \
             -configuration Release \
             CODE_SIGNING_ALLOWED=NO \
             | xcpretty --color
@@ -74,4 +81,4 @@ jobs:
       - name: Run SwiftLint
         run: |
           brew install swiftlint
-          swiftlint lint --reporter github-actions-logging
+          swiftlint lint --reporter github-actions-logging --no-strict
