@@ -53,21 +53,17 @@ final class PlayerViewModel: ObservableObject {
             let url: URL?
             if let transcodingPath = mediaSource.transcodingUrl, !transcodingPath.isEmpty {
                 url = await client.buildURL(path: transcodingPath)
-                print("Using transcoding URL")
             } else if let directPath = mediaSource.directStreamUrl, !directPath.isEmpty {
                 url = await client.buildURL(path: directPath)
-                print("Using direct stream URL")
             } else {
                 url = await client.getPlaybackURL(itemId: item.id, mediaSourceId: mediaSource.id, container: mediaSource.container)
-                print("Using constructed URL")
             }
             
             guard let url else {
                 throw PlayerError.noStreamURL
             }
-            
+
             attemptedURL = url.absoluteString
-            print("Playing URL: \(url.absoluteString)")
 
             // Configure audio session for playback
             let audioSession = AVAudioSession.sharedInstance()
@@ -82,7 +78,6 @@ final class PlayerViewModel: ObservableObject {
                     if item.status == .failed {
                         self?.errorMessage = item.error?.localizedDescription ?? "Unknown playback error"
                         self?.error = item.error
-                        print("AVPlayerItem failed: \(item.error?.localizedDescription ?? "unknown")")
                     }
                 }
             }
@@ -96,7 +91,6 @@ final class PlayerViewModel: ObservableObject {
                     if player.status == .failed {
                         self?.errorMessage = player.error?.localizedDescription ?? "Player failed"
                         self?.error = player.error
-                        print("AVPlayer failed: \(player.error?.localizedDescription ?? "unknown")")
                     }
                 }
             }
@@ -113,7 +107,6 @@ final class PlayerViewModel: ObservableObject {
             isLoading = false
             player?.play()
         } catch {
-            print("Playback error: \(error)")
             self.error = error
             self.errorMessage = error.localizedDescription
             isLoading = false
@@ -158,19 +151,19 @@ final class PlayerViewModel: ObservableObject {
     
     func loadAudioTracks() {
         guard let playerItem = player?.currentItem else { return }
-        
-        let audioGroup = playerItem.asset.mediaSelectionGroup(forMediaCharacteristic: .audible)
-        guard let options = audioGroup?.options else {
+
+        guard let audioGroup = playerItem.asset.mediaSelectionGroup(forMediaCharacteristic: .audible) else {
             audioTracks = []
             return
         }
-        
+
+        let options = audioGroup.options
         var tracks: [AudioTrackOption] = []
         for (index, option) in options.enumerated() {
             let locale = option.locale
             let displayName = option.displayName
-            let langCode = locale?.languageCode
-            
+            let langCode = locale?.language.languageCode?.identifier
+
             tracks.append(AudioTrackOption(
                 id: "\(index)",
                 displayName: displayName,
@@ -178,10 +171,10 @@ final class PlayerViewModel: ObservableObject {
                 index: index
             ))
         }
-        
+
         audioTracks = tracks
-        
-        if let currentSelection = playerItem.currentMediaSelection.selectedMediaOption(in: audioGroup!),
+
+        if let currentSelection = playerItem.currentMediaSelection.selectedMediaOption(in: audioGroup),
            let currentIndex = options.firstIndex(of: currentSelection) {
             selectedAudioTrackId = "\(currentIndex)"
         }
@@ -217,7 +210,7 @@ final class PlayerViewModel: ObservableObject {
             for (index, option) in options.enumerated() {
                 let locale = option.locale
                 let displayName = option.displayName
-                let langCode = locale?.languageCode
+                let langCode = locale?.language.languageCode?.identifier
 
                 tracks.append(SubtitleTrackOption(
                     id: "\(index)",
@@ -234,8 +227,7 @@ final class PlayerViewModel: ObservableObject {
         // Check current selection
         if let subtitleGroup,
            let currentSelection = playerItem.currentMediaSelection.selectedMediaOption(in: subtitleGroup),
-           let options = subtitleGroup.options as? [AVMediaSelectionOption],
-           let currentIndex = options.firstIndex(of: currentSelection) {
+           let currentIndex = subtitleGroup.options.firstIndex(of: currentSelection) {
             selectedSubtitleTrackId = "\(currentIndex)"
         } else {
             selectedSubtitleTrackId = "off"

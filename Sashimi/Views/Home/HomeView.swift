@@ -113,8 +113,13 @@ struct HeroSection: View {
     @FocusState private var isFocused: Bool
     @State private var autoScrollTimer: Timer?
     
+    private var safeIndex: Int {
+        guard !items.isEmpty else { return 0 }
+        return min(currentIndex, items.count - 1)
+    }
+
     private var currentItem: BaseItemDto {
-        items[currentIndex]
+        items[safeIndex]
     }
 
     // Check if item has backdrop images (regular shows have it, YouTube doesn't)
@@ -144,6 +149,7 @@ struct HeroSection: View {
 
     private func startAutoScroll() {
         autoScrollTimer?.invalidate()
+        guard items.count > 1 else { return }
         autoScrollTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: true) { _ in
             withAnimation(.easeInOut(duration: 0.6)) {
                 currentIndex = (currentIndex + 1) % items.count
@@ -276,6 +282,7 @@ struct HeroSection: View {
         .buttonStyle(PlainNoHighlightButtonStyle())
         .focused($isFocused)
         .onMoveCommand { direction in
+            guard items.count > 1 else { return }
             switch direction {
             case .left:
                 withAnimation(.easeInOut(duration: 0.4)) {

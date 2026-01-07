@@ -62,11 +62,16 @@ actor JellyfinClient {
         guard let serverURL else {
             throw JellyfinError.notConfigured
         }
-        
-        var components = URLComponents(url: serverURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+
+        guard var components = URLComponents(url: serverURL.appendingPathComponent(path), resolvingAgainstBaseURL: false) else {
+            throw JellyfinError.invalidURL
+        }
         components.queryItems = queryItems
-        
-        var request = URLRequest(url: components.url!)
+
+        guard let url = components.url else {
+            throw JellyfinError.invalidURL
+        }
+        var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue(authorizationHeader, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -268,9 +273,8 @@ actor JellyfinClient {
     }
     
     func getPlaybackURL(itemId: String, mediaSourceId: String, container: String? = nil) -> URL? {
-        guard let serverURL, let accessToken else { 
-            print("Missing serverURL or accessToken")
-            return nil 
+        guard let serverURL, let accessToken else {
+            return nil
         }
         
         var components = URLComponents(string: serverURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
@@ -285,43 +289,47 @@ actor JellyfinClient {
             URLQueryItem(name: "DeviceId", value: deviceId)
         ]
         
-        let url = components?.url
-        print("Generated stream URL: \(url?.absoluteString ?? "nil")")
-        return url
+        return components?.url
     }
     
     func imageURL(itemId: String, imageType: String = "Primary", maxWidth: Int = 400) -> URL? {
         guard let serverURL else { return nil }
-        
-        var components = URLComponents(url: serverURL.appendingPathComponent("/Items/\(itemId)/Images/\(imageType)"), resolvingAgainstBaseURL: false)!
+
+        guard var components = URLComponents(url: serverURL.appendingPathComponent("/Items/\(itemId)/Images/\(imageType)"), resolvingAgainstBaseURL: false) else {
+            return nil
+        }
         components.queryItems = [
             URLQueryItem(name: "maxWidth", value: "\(maxWidth)")
         ]
-        
+
         return components.url
     }
     
     nonisolated func userImageURL(userId: String, maxWidth: Int = 100) -> URL? {
         guard let serverURL = UserDefaults.standard.string(forKey: "serverURL"),
               let url = URL(string: serverURL) else { return nil }
-        
-        var components = URLComponents(url: url.appendingPathComponent("/Users/\(userId)/Images/Primary"), resolvingAgainstBaseURL: false)!
+
+        guard var components = URLComponents(url: url.appendingPathComponent("/Users/\(userId)/Images/Primary"), resolvingAgainstBaseURL: false) else {
+            return nil
+        }
         components.queryItems = [
             URLQueryItem(name: "maxWidth", value: "\(maxWidth)")
         ]
-        
+
         return components.url
     }
     
     nonisolated func personImageURL(personId: String, maxWidth: Int = 150) -> URL? {
         guard let serverURL = UserDefaults.standard.string(forKey: "serverURL"),
               let url = URL(string: serverURL) else { return nil }
-        
-        var components = URLComponents(url: url.appendingPathComponent("/Items/\(personId)/Images/Primary"), resolvingAgainstBaseURL: false)!
+
+        guard var components = URLComponents(url: url.appendingPathComponent("/Items/\(personId)/Images/Primary"), resolvingAgainstBaseURL: false) else {
+            return nil
+        }
         components.queryItems = [
             URLQueryItem(name: "maxWidth", value: "\(maxWidth)")
         ]
-        
+
         return components.url
     }
     
@@ -470,15 +478,18 @@ actor JellyfinClient {
 enum JellyfinError: LocalizedError {
     case notConfigured
     case invalidResponse
+    case invalidURL
     case httpError(statusCode: Int)
     case decodingError
-    
+
     var errorDescription: String? {
         switch self {
         case .notConfigured:
             return "Server not configured"
         case .invalidResponse:
             return "Invalid server response"
+        case .invalidURL:
+            return "Failed to construct URL"
         case .httpError(let code):
             return "HTTP error: \(code)"
         case .decodingError:

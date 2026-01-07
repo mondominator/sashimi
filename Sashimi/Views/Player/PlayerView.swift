@@ -14,16 +14,6 @@ struct PlayerView: View {
     @State private var timeObserver: Any?
     @State private var showingAudioPicker = false
     @State private var showingSubtitlePicker = false
-    @FocusState private var focusedControl: PlayerControl?
-
-    enum PlayerControl: Hashable {
-        case playPause
-        case skipBack
-        case skipForward
-        case audio
-        case subtitles
-        case scrubber
-    }
 
     var body: some View {
         ZStack {
@@ -146,7 +136,6 @@ struct PlayerView: View {
                         scheduleHideControls()
                     }
                 )
-                .focused($focusedControl, equals: .scrubber)
 
                 // Time labels
                 HStack {
@@ -165,55 +154,45 @@ struct PlayerView: View {
                     // Audio button
                     ControlButton(
                         icon: "speaker.wave.2",
-                        label: "Audio",
-                        isFocused: focusedControl == .audio
+                        label: "Audio"
                     ) {
                         viewModel.loadAllTracks()
                         showingAudioPicker = true
                     }
-                    .focused($focusedControl, equals: .audio)
 
                     // Skip back
                     ControlButton(
                         icon: "gobackward.15",
-                        label: "",
-                        isFocused: focusedControl == .skipBack
+                        label: ""
                     ) {
                         skip(by: -15, player: player)
                     }
-                    .focused($focusedControl, equals: .skipBack)
 
                     // Play/Pause
                     ControlButton(
                         icon: player.timeControlStatus == .playing ? "pause.fill" : "play.fill",
                         label: "",
-                        isLarge: true,
-                        isFocused: focusedControl == .playPause
+                        isLarge: true
                     ) {
                         togglePlayPause()
                     }
-                    .focused($focusedControl, equals: .playPause)
 
                     // Skip forward
                     ControlButton(
                         icon: "goforward.15",
-                        label: "",
-                        isFocused: focusedControl == .skipForward
+                        label: ""
                     ) {
                         skip(by: 15, player: player)
                     }
-                    .focused($focusedControl, equals: .skipForward)
 
                     // Subtitles button
                     ControlButton(
                         icon: "captions.bubble",
-                        label: "Subtitles",
-                        isFocused: focusedControl == .subtitles
+                        label: "Subtitles"
                     ) {
                         viewModel.loadAllTracks()
                         showingSubtitlePicker = true
                     }
-                    .focused($focusedControl, equals: .subtitles)
                 }
             }
             .padding(.horizontal, 80)
@@ -230,9 +209,6 @@ struct PlayerView: View {
         }
         .transition(.opacity)
         .animation(.easeInOut(duration: 0.3), value: showControls)
-        .onAppear {
-            focusedControl = .playPause
-        }
     }
 
     private func togglePlayPause() {
@@ -325,8 +301,9 @@ struct ControlButton: View {
     let icon: String
     let label: String
     var isLarge: Bool = false
-    var isFocused: Bool = false
     let action: () -> Void
+
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         Button(action: action) {
@@ -344,7 +321,8 @@ struct ControlButton: View {
             .scaleEffect(isFocused ? 1.15 : 1.0)
             .animation(.spring(response: 0.3), value: isFocused)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.card)
+        .focused($isFocused)
     }
 }
 
