@@ -49,10 +49,19 @@ struct ContinueWatchingCard: View {
     
     @FocusState private var isFocused: Bool
     
+    // Check if parent series has backdrop images (regular shows have it, YouTube doesn't)
+    private var seriesHasBackdrop: Bool {
+        if let tags = item.parentBackdropImageTags, !tags.isEmpty {
+            return true
+        }
+        return false
+    }
+
     private var imageId: String {
-        // For episodes, use series backdrop
+        // For episodes with backdrops (regular shows), use series backdrop
+        // For episodes without backdrops (YouTube), use episode's own thumbnail
         if item.type == .episode {
-            return item.seriesId ?? item.id
+            return seriesHasBackdrop ? (item.seriesId ?? item.id) : item.id
         }
         return item.id
     }
@@ -60,7 +69,7 @@ struct ContinueWatchingCard: View {
     private var imageType: String {
         switch item.type {
         case .episode:
-            return "Backdrop"
+            return seriesHasBackdrop ? "Backdrop" : "Primary"
         case .video:
             return "Primary"
         default:

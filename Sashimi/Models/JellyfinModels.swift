@@ -47,6 +47,7 @@ struct BaseItemDto: Codable, Identifiable, Hashable {
     let userData: UserItemDataDto?
     let imageTags: [String: String]?
     let backdropImageTags: [String]?
+    let parentBackdropImageTags: [String]?
     let primaryImageAspectRatio: Double?
     let mediaType: String?
     let productionYear: Int?
@@ -72,6 +73,7 @@ struct BaseItemDto: Codable, Identifiable, Hashable {
         case userData = "UserData"
         case imageTags = "ImageTags"
         case backdropImageTags = "BackdropImageTags"
+        case parentBackdropImageTags = "ParentBackdropImageTags"
         case primaryImageAspectRatio = "PrimaryImageAspectRatio"
         case mediaType = "MediaType"
         case productionYear = "ProductionYear"

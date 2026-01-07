@@ -475,6 +475,7 @@ struct SubtitlePickerSheet: View {
         userData: nil,
         imageTags: nil,
         backdropImageTags: nil,
+        parentBackdropImageTags: nil,
         primaryImageAspectRatio: nil,
         mediaType: nil,
         productionYear: nil,
