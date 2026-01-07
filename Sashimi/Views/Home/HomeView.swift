@@ -116,7 +116,32 @@ struct HeroSection: View {
     private var currentItem: BaseItemDto {
         items[currentIndex]
     }
-    
+
+    // Check if item has backdrop images (regular shows have it, YouTube doesn't)
+    private var itemHasBackdrop: Bool {
+        if let tags = currentItem.backdropImageTags, !tags.isEmpty {
+            return true
+        }
+        return false
+    }
+
+    private var heroImageId: String {
+        // For episodes with backdrops (regular shows), use series backdrop
+        // For episodes without backdrops (YouTube), use episode's own thumbnail
+        if currentItem.type == .episode {
+            return itemHasBackdrop ? (currentItem.seriesId ?? currentItem.id) : currentItem.id
+        }
+        return currentItem.id
+    }
+
+    private var heroImageType: String {
+        // YouTube episodes don't have backdrops, use Primary (thumbnail)
+        if currentItem.type == .episode && !itemHasBackdrop {
+            return "Primary"
+        }
+        return "Backdrop"
+    }
+
     private func startAutoScroll() {
         autoScrollTimer?.invalidate()
         autoScrollTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: true) { _ in
@@ -135,8 +160,8 @@ struct HeroSection: View {
         Button(action: { onSelect(currentItem) }) {
             ZStack(alignment: .bottomLeading) {
                 AsyncItemImage(
-                    itemId: currentItem.type == .episode ? (currentItem.seriesId ?? currentItem.id) : currentItem.id,
-                    imageType: "Backdrop",
+                    itemId: heroImageId,
+                    imageType: heroImageType,
                     maxWidth: 1920,
                     contentMode: .fit,
                     fallbackImageTypes: ["Thumb", "Primary"]
