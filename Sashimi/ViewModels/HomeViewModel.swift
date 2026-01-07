@@ -1,0 +1,135 @@
+import Foundation
+import Combine
+import TVServices
+
+@MainActor
+final class HomeViewModel: ObservableObject {
+    @Published var continueWatchingItems: [BaseItemDto] = []
+    @Published var recentlyAddedItems: [BaseItemDto] = []
+    @Published var heroItems: [BaseItemDto] = []
+    @Published var libraries: [JellyfinLibrary] = []
+    @Published var isLoading = false
+    @Published var error: Error?
+
+    private let client = JellyfinClient.shared
+    private let appGroupIdentifier = "group.com.sashimi.app"
+
+    func loadContent() async {
+        isLoading = true
+        error = nil
+
+        do {
+            async let resumeItems = client.getResumeItems()
+            async let nextUpItems = client.getNextUp()
+            async let latestItems = client.getLatestMedia()
+            async let libraryViews = client.getLibraryViews()
+
+            let (resume, nextUp, latest, libs) = try await (resumeItems, nextUpItems, latestItems, libraryViews)
+
+            continueWatchingItems = mergeAndSortContinueItems(resume: resume, nextUp: nextUp)
+            recentlyAddedItems = latest
+            libraries = libs.filter { isMediaLibrary($0) }
+
+            // Save continue watching items for TopShelf extension
+            saveContinueWatchingForTopShelf()
+
+            // Load latest 5 from each library for hero rotation
+            await loadHeroItems()
+        } catch {
+            self.error = error
+        }
+
+        isLoading = false
+    }
+
+    private func saveContinueWatchingForTopShelf() {
+        guard let defaults = UserDefaults(suiteName: appGroupIdentifier),
+              let serverURL = UserDefaults.standard.string(forKey: "serverURL") else { return }
+
+        let items: [[String: Any]] = continueWatchingItems.prefix(10).compactMap { item in
+            // For episodes, use series backdrop; for videos use Primary; for movies use Backdrop
+            let imageId = item.type == .episode ? (item.seriesId ?? item.id) : item.id
+            let imageType = item.type == .video ? "Primary" : "Backdrop"
+            let imageURLString = "\(serverURL)/Items/\(imageId)/Images/\(imageType)?maxWidth=1920"
+            guard let imageURL = URL(string: imageURLString) else {
+                return nil
+            }
+
+            var subtitle = ""
+            if item.type == .episode {
+                let season = item.parentIndexNumber ?? 1
+                let episode = item.indexNumber ?? 1
+                subtitle = "S\(season):E\(episode)"
+                if let seriesName = item.seriesName {
+                    subtitle = "\(seriesName) • \(subtitle)"
+                }
+            }
+
+            return [
+                "id": item.id,
+                "name": item.type == .episode ? (item.seriesName ?? item.name) : item.name,
+                "subtitle": subtitle,
+                "imageURL": imageURL.absoluteString,
+                "type": item.type?.rawValue ?? "unknown",
+                "progress": item.progressPercent
+            ]
+        }
+
+        defaults.set(items, forKey: "continueWatchingItems")
+
+        // Notify TopShelf to reload
+        TVTopShelfContentProvider.topShelfContentDidChange()
+    }
+
+    private func loadHeroItems() async {
+        var allHeroItems: [BaseItemDto] = []
+
+        for library in libraries {
+            do {
+                let items = try await client.getLatestMedia(parentId: library.id, limit: 5)
+                allHeroItems.append(contentsOf: items)
+            } catch {
+                print("Failed to load hero items for library \(library.name): \(error)")
+            }
+        }
+
+        // Shuffle the combined items
+        heroItems = allHeroItems.shuffled()
+    }
+    
+    func refresh() async {
+        await loadContent()
+    }
+    
+    private func mergeAndSortContinueItems(resume: [BaseItemDto], nextUp: [BaseItemDto]) -> [BaseItemDto] {
+        var seen = Set<String>()
+        var merged: [BaseItemDto] = []
+        
+        for item in resume {
+            if !seen.contains(item.id) {
+                seen.insert(item.id)
+                merged.append(item)
+            }
+        }
+        
+        for item in nextUp {
+            if let seriesId = item.seriesId {
+                if !seen.contains(seriesId) && !seen.contains(item.id) {
+                    seen.insert(seriesId)
+                    seen.insert(item.id)
+                    merged.append(item)
+                }
+            } else if !seen.contains(item.id) {
+                seen.insert(item.id)
+                merged.append(item)
+            }
+        }
+        
+        return Array(merged.prefix(20))
+    }
+    
+    private func isMediaLibrary(_ library: JellyfinLibrary) -> Bool {
+        guard let collectionType = library.collectionType?.lowercased() else { return true }
+        return ["movies", "tvshows", "music", "mixed", "homevideos"].contains(collectionType)
+    }
+}
