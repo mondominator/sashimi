@@ -47,9 +47,26 @@ final class HomeViewModel: ObservableObject {
               let serverURL = UserDefaults.standard.string(forKey: "serverURL") else { return }
 
         let items: [[String: Any]] = continueWatchingItems.prefix(10).compactMap { item in
-            // For episodes, use series backdrop; for videos use Primary; for movies use Backdrop
-            let imageId = item.type == .episode ? (item.seriesId ?? item.id) : item.id
-            let imageType = item.type == .video ? "Primary" : "Backdrop"
+            // Check if parent series has backdrop images (regular shows have it, YouTube doesn't)
+            let seriesHasBackdrop = item.parentBackdropImageTags?.isEmpty == false
+
+            // For episodes with backdrops (regular shows), use series backdrop
+            // For episodes without backdrops (YouTube), use episode's own thumbnail
+            let imageId: String
+            let imageType: String
+
+            switch item.type {
+            case .episode:
+                imageId = seriesHasBackdrop ? (item.seriesId ?? item.id) : item.id
+                imageType = seriesHasBackdrop ? "Backdrop" : "Primary"
+            case .video:
+                imageId = item.id
+                imageType = "Primary"
+            default:
+                imageId = item.id
+                imageType = "Backdrop"
+            }
+
             let imageURLString = "\(serverURL)/Items/\(imageId)/Images/\(imageType)?maxWidth=1920"
             guard let imageURL = URL(string: imageURLString) else {
                 return nil
