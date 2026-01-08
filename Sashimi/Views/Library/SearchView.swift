@@ -13,6 +13,7 @@ private enum SashimiTheme {
 }
 
 struct SearchView: View {
+    var onBackAtRoot: (() -> Void)?
     @State private var searchText = ""
     @State private var results: [BaseItemDto] = []
     @State private var isSearching = false
@@ -114,14 +115,14 @@ struct SearchView: View {
         .fullScreenCover(item: $selectedItem) { item in
             MediaDetailView(item: item)
         }
-        .onAppear {
-            isSearchFieldFocused = true
-        }
         .onExitCommand {
-            // Clear search when pressing Menu button
             if !searchText.isEmpty {
+                // Clear search first
                 searchText = ""
                 results = []
+            } else {
+                // At root with empty search
+                onBackAtRoot?()
             }
         }
     }

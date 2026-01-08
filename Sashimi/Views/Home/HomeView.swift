@@ -1,5 +1,13 @@
 import SwiftUI
 
+// MARK: - Scroll Tracking
+private struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 // MARK: - Theme Colors
 private enum SashimiTheme {
     static let background = Color(red: 0.07, green: 0.07, blue: 0.09)
@@ -54,9 +62,12 @@ struct HomeView: View {
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(alignment: .leading, spacing: 40) {
                             // Top anchor for scroll reset
-                            Color.clear
-                                .frame(height: 1)
-                                .id("top")
+                            GeometryReader { geo in
+                                Color.clear
+                                    .preference(key: ScrollOffsetPreferenceKey.self, value: geo.frame(in: .named("scroll")).minY)
+                            }
+                            .frame(height: 1)
+                            .id("top")
 
                             // Render rows based on settings order
                             ForEach(homeSettings.rowConfigs) { config in
@@ -69,6 +80,11 @@ struct HomeView: View {
                             Spacer()
                                 .frame(height: 100)
                         }
+                    }
+                    .coordinateSpace(name: "scroll")
+                    .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
+                        // At top when offset is >= 0 (or close to it)
+                        isAtDefaultState = offset >= -10
                     }
                     .refreshable {
                         await viewModel.refresh()
