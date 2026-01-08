@@ -1,21 +1,23 @@
 import SwiftUI
 
-// Smart poster that tries multiple item IDs until one works
-// For each item ID, tries Primary then Thumb image types
+// Smart image that tries multiple item IDs until one works
+// For each item ID, tries specified image types in order
 struct SmartPosterImage: View {
     let itemIds: [String]
     let maxWidth: Int
+    var imageTypes: [String] = ["Primary", "Thumb"]
+    var contentMode: ContentMode = .fill
 
     @State private var currentIndex: Int = 0
-    @State private var currentImageType: String = "Primary"
+    @State private var currentTypeIndex: Int = 0
     @State private var loadFailed: Bool = false
     @State private var attemptId = UUID()
 
     private var currentURL: URL? {
-        guard currentIndex < itemIds.count else { return nil }
+        guard currentIndex < itemIds.count, currentTypeIndex < imageTypes.count else { return nil }
         return JellyfinClient.shared.syncImageURL(
             itemId: itemIds[currentIndex],
-            imageType: currentImageType,
+            imageType: imageTypes[currentTypeIndex],
             maxWidth: maxWidth
         )
     }
@@ -30,7 +32,7 @@ struct SmartPosterImage: View {
                     case .success(let image):
                         image
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
+                            .aspectRatio(contentMode: contentMode)
                     case .failure:
                         Color.clear
                             .task(id: attemptId) {
@@ -44,7 +46,7 @@ struct SmartPosterImage: View {
                         placeholderView
                     }
                 }
-                .id("\(currentIndex)-\(currentImageType)-\(attemptId)")
+                .id("\(currentIndex)-\(currentTypeIndex)-\(attemptId)")
             } else {
                 placeholderView
             }
@@ -52,17 +54,17 @@ struct SmartPosterImage: View {
     }
 
     private func advanceToNext() {
-        // First try Thumb for current item if we were on Primary
-        if currentImageType == "Primary" {
-            currentImageType = "Thumb"
+        // Try next image type for current item
+        if currentTypeIndex < imageTypes.count - 1 {
+            currentTypeIndex += 1
             attemptId = UUID()
             return
         }
 
-        // Move to next item ID, reset to Primary
+        // Move to next item ID, reset to first image type
         if currentIndex < itemIds.count - 1 {
             currentIndex += 1
-            currentImageType = "Primary"
+            currentTypeIndex = 0
             attemptId = UUID()
         } else {
             loadFailed = true
