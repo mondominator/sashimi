@@ -4,9 +4,10 @@ struct LibraryView: View {
     @State private var libraries: [LibraryView_Model] = []
     @State private var selectedLibrary: LibraryView_Model?
     @State private var isLoading = true
+    @State private var navigationPath = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             ScrollView {
                 if isLoading {
                     ProgressView()
@@ -14,14 +15,15 @@ struct LibraryView: View {
                 } else {
                     LazyVGrid(columns: [
                         GridItem(.adaptive(minimum: 300, maximum: 400), spacing: 40)
-                    ], spacing: 40) {
+                    ], alignment: .center, spacing: 40) {
                         ForEach(libraries) { library in
                             NavigationLink(value: library) {
                                 LibraryCard(library: library)
                             }
-                            .buttonStyle(CardButtonStyle())
+                            .buttonStyle(.plain)
                         }
                     }
+                    .frame(maxWidth: .infinity)
                     .padding(60)
                 }
             }

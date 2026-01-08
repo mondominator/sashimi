@@ -148,11 +148,11 @@ struct MediaDetailView: View {
         } message: {
             Text(mediaInfo?.path ?? "Path not available")
         }
-        .alert("Delete Item", isPresented: $showingDeleteConfirm) {
-            Button("Cancel", role: .cancel) { }
+        .confirmationDialog("Delete Item", isPresented: $showingDeleteConfirm, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 Task { await deleteItem() }
             }
+            Button("Cancel", role: .cancel) { }
         } message: {
             Text("Are you sure you want to delete this item? This cannot be undone.")
         }

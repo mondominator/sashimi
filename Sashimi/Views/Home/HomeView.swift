@@ -109,6 +109,7 @@ struct HomeView: View {
         .overlay {
             if viewModel.isLoading && viewModel.continueWatchingItems.isEmpty {
                 LoadingOverlay()
+                    .allowsHitTesting(false) // Allow navigation while loading
             }
         }
     }
@@ -388,6 +389,8 @@ struct RecentlyAddedLibraryRow: View {
     let library: JellyfinLibrary
     let onSelect: (BaseItemDto) -> Void
     @State private var items: [BaseItemDto] = []
+    @State private var isLoading = true
+    @State private var loadError = false
 
     private var sectionTitle: String {
         "Recently Added \(library.name)"
@@ -405,11 +408,39 @@ struct RecentlyAddedLibraryRow: View {
                 .foregroundStyle(SashimiTheme.textPrimary)
                 .padding(.horizontal, 80)
 
-            if items.isEmpty {
+            if isLoading {
                 HStack {
                     Spacer()
                     ProgressView()
                         .tint(SashimiTheme.accent)
+                    Spacer()
+                }
+                .frame(height: isYouTubeLibrary ? 220 : 340)
+            } else if loadError {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.largeTitle)
+                            .foregroundStyle(SashimiTheme.textTertiary)
+                        Text("Failed to load")
+                            .font(.headline)
+                            .foregroundStyle(SashimiTheme.textSecondary)
+                        Button("Retry") {
+                            Task { await loadItems() }
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(SashimiTheme.accent)
+                    }
+                    Spacer()
+                }
+                .frame(height: isYouTubeLibrary ? 220 : 340)
+            } else if items.isEmpty {
+                HStack {
+                    Spacer()
+                    Text("No items")
+                        .font(.headline)
+                        .foregroundStyle(SashimiTheme.textTertiary)
                     Spacer()
                 }
                 .frame(height: isYouTubeLibrary ? 220 : 340)
@@ -438,8 +469,11 @@ struct RecentlyAddedLibraryRow: View {
     }
 
     private func loadItems() async {
-        // Skip if already loaded
+        // Skip if already loaded successfully
         guard items.isEmpty else { return }
+
+        isLoading = true
+        loadError = false
 
         do {
             let latestItems = try await JellyfinClient.shared.getLatestMedia(parentId: library.id, limit: 30)
@@ -447,8 +481,10 @@ struct RecentlyAddedLibraryRow: View {
         } catch is CancellationError {
             // Ignore cancellation errors - expected during navigation
         } catch {
-            ToastManager.shared.show("Failed to load recently added items")
+            loadError = true
         }
+
+        isLoading = false
     }
 
     private func deduplicateBySeries(_ items: [BaseItemDto]) -> [BaseItemDto] {
