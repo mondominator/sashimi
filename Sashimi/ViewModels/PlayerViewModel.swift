@@ -30,11 +30,13 @@ final class PlayerViewModel: ObservableObject {
     @Published var selectedAudioTrackId: String?
     @Published var subtitleTracks: [SubtitleTrackOption] = []
     @Published var selectedSubtitleTrackId: String?
+    @Published var playbackEnded = false
 
     private var timeObserver: Any?
     private var progressReportTask: Task<Void, Never>?
     private var statusObserver: NSKeyValueObservation?
     private var errorObserver: NSKeyValueObservation?
+    private var endObserver: NSObjectProtocol?
     private let client = JellyfinClient.shared
 
     func loadMedia(item: BaseItemDto) async {
@@ -95,6 +97,17 @@ final class PlayerViewModel: ObservableObject {
                 }
             }
 
+            // Observe playback end
+            endObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: playerItem,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    await self?.handlePlaybackEnded()
+                }
+            }
+
             if let startTicks = item.userData?.playbackPositionTicks, startTicks > 0 {
                 let startTime = CMTime(value: startTicks / 10000, timescale: 1000)
                 await player?.seek(to: startTime)
@@ -134,8 +147,29 @@ final class PlayerViewModel: ObservableObject {
         try? await client.reportPlaybackProgress(itemId: item.id, positionTicks: positionTicks, isPaused: isPaused)
     }
 
+    private func handlePlaybackEnded() async {
+        progressReportTask?.cancel()
+
+        if let item = currentItem {
+            // Mark as watched by reporting position at the end
+            if let duration = player?.currentItem?.duration.seconds, duration.isFinite {
+                let endTicks = Int64(duration * 10_000_000)
+                try? await client.reportPlaybackStopped(itemId: item.id, positionTicks: endTicks)
+            }
+            // Mark item as played
+            try? await client.markPlayed(itemId: item.id)
+        }
+
+        playbackEnded = true
+    }
+
     func stop() async {
         progressReportTask?.cancel()
+
+        if let endObserver {
+            NotificationCenter.default.removeObserver(endObserver)
+            self.endObserver = nil
+        }
 
         if let item = currentItem,
            let player,
@@ -255,6 +289,9 @@ final class PlayerViewModel: ObservableObject {
 
     deinit {
         progressReportTask?.cancel()
+        if let endObserver {
+            NotificationCenter.default.removeObserver(endObserver)
+        }
     }
 }
 

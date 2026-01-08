@@ -41,6 +41,11 @@ struct PlayerView: View {
                 dismiss()
             }
         }
+        .onChange(of: viewModel.playbackEnded) { _, ended in
+            if ended {
+                dismiss()
+            }
+        }
     }
 
     private func errorView(error: Error) -> some View {
