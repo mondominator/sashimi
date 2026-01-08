@@ -31,6 +31,8 @@ final class PlayerViewModel: ObservableObject {
     @Published var subtitleTracks: [SubtitleTrackOption] = []
     @Published var selectedSubtitleTrackId: String?
     @Published var playbackEnded = false
+    @Published var nextEpisode: BaseItemDto?
+    @Published var showingUpNext = false
 
     private var timeObserver: Any?
     private var progressReportTask: Task<Void, Never>?
@@ -158,8 +160,70 @@ final class PlayerViewModel: ObservableObject {
             }
             // Mark item as played
             try? await client.markPlayed(itemId: item.id)
+
+            // Check for next episode/video if this is an episode or video
+            if let next = await fetchNextItem(for: item) {
+                nextEpisode = next
+                showingUpNext = true
+                return
+            }
         }
 
+        playbackEnded = true
+    }
+
+    private func fetchNextItem(for item: BaseItemDto) async -> BaseItemDto? {
+        // Handle episodes (TV shows and YouTube content)
+        if item.type == .episode, let seasonId = item.seasonId, let currentIndex = item.indexNumber {
+            // First try exact match (index + 1) for regular TV shows
+            if let next = await fetchNextByIndex(parentId: seasonId, currentIndex: currentIndex, type: .episode, exactMatch: true) {
+                return next
+            }
+            // Fall back to next higher index for YouTube (date-based indexes like 20241108)
+            return await fetchNextByIndex(parentId: seasonId, currentIndex: currentIndex, type: .episode, exactMatch: false)
+        }
+
+        // Handle videos (explicit Video type)
+        if item.type == .video {
+            let parentId = item.seasonId ?? item.seriesId ?? item.parentId
+            guard let parentId, let currentIndex = item.indexNumber else { return nil }
+            return await fetchNextByIndex(parentId: parentId, currentIndex: currentIndex, type: .video, exactMatch: false)
+        }
+
+        return nil
+    }
+
+    private func fetchNextByIndex(parentId: String, currentIndex: Int, type: ItemType, exactMatch: Bool = true) async -> BaseItemDto? {
+        do {
+            let response = try await client.getItems(
+                parentId: parentId,
+                includeTypes: [type],
+                sortBy: "IndexNumber",
+                limit: 100
+            )
+            if exactMatch {
+                // For TV episodes: look for exact next index (1, 2, 3...)
+                return response.items.first { ($0.indexNumber ?? 0) == currentIndex + 1 }
+            } else {
+                // For YouTube: find first item with higher index (sorted ascending)
+                return response.items.first { ($0.indexNumber ?? 0) > currentIndex }
+            }
+        } catch {
+            return nil
+        }
+    }
+
+    func playNextEpisode() async {
+        guard let next = nextEpisode else { return }
+        showingUpNext = false
+        nextEpisode = nil
+        playbackEnded = false
+        await loadMedia(item: next)
+    }
+
+    func cancelUpNext() {
+        showingUpNext = false
+        nextEpisode = nil
         playbackEnded = true
     }
 
