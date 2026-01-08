@@ -87,44 +87,37 @@ struct MediaPosterButton: View {
         }
     }
 
-    // Check if item has its own primary image
-    private var itemHasPrimaryImage: Bool {
-        if let tags = item.imageTags, tags["Primary"] != nil {
-            return true
-        }
-        return false
-    }
-
-    private var imageId: String {
+    // Fallback image IDs for poster display (season → series, skip episode)
+    private var posterFallbackIds: [String] {
+        var ids: [String] = []
         if item.type == .episode || item.type == .video {
-            // For YouTube-style: use series poster (seasons don't have images)
+            // For YouTube-style: series only (seasons don't have images)
             if isYouTubeStyle {
-                return item.seriesId ?? item.id
+                if let seriesId = item.seriesId {
+                    ids.append(seriesId)
+                }
+                ids.append(item.id)
+            } else {
+                // Regular TV: season first, then series
+                if let seasonId = item.seasonId {
+                    ids.append(seasonId)
+                }
+                if let seriesId = item.seriesId {
+                    ids.append(seriesId)
+                }
+                ids.append(item.id)
             }
-            // Use season poster for regular TV shows, fall back to series
-            return item.seasonId ?? item.seriesId ?? item.id
+        } else {
+            ids.append(item.id)
         }
-        return item.id
-    }
-
-    private var fallbackImageTypes: [String] {
-        if isYouTubeStyle {
-            // YouTube-style content may have Thumb instead of Primary
-            return ["Thumb", "Backdrop"]
-        }
-        return ["Thumb"]
+        return ids
     }
 
     var body: some View {
         Button(action: onSelect) {
             VStack(alignment: .leading, spacing: 14) {
                 ZStack(alignment: .bottomLeading) {
-                    AsyncItemImage(
-                        itemId: imageId,
-                        imageType: "Primary",
-                        maxWidth: 400,
-                        fallbackImageTypes: fallbackImageTypes
-                    )
+                    SmartPosterImage(itemIds: posterFallbackIds, maxWidth: 400)
                     .frame(width: 220, height: 330)
                     .overlay(
                         LinearGradient(

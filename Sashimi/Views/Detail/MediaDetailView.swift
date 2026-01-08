@@ -877,11 +877,16 @@ struct EpisodeCard: View {
 
     @FocusState private var isFocused: Bool
 
-    private var imageId: String {
-        if showEpisodeThumbnail {
-            return episode.id
+    // All possible image sources in order: episode, season, series
+    private var fallbackImageIds: [String] {
+        var ids = [episode.id]
+        if let seasonId = episode.seasonId {
+            ids.append(seasonId)
         }
-        return episode.seasonId ?? episode.seriesId ?? episode.id
+        if let seriesId = episode.seriesId {
+            ids.append(seriesId)
+        }
+        return ids
     }
 
     var body: some View {
@@ -889,24 +894,15 @@ struct EpisodeCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack(alignment: .bottomLeading) {
                     if showEpisodeThumbnail {
-                        AsyncItemImage(
-                            itemId: episode.id,
-                            imageType: "Primary",
-                            maxWidth: 400,
-                            contentMode: .fit,
-                            fallbackImageTypes: ["Thumb"]
-                        )
-                        .frame(width: 240, height: 135)
-                        .background(Color.black)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        // Try episode thumbnail first, fall back to season/series poster
+                        SmartPosterImage(itemIds: fallbackImageIds, maxWidth: 400)
+                            .frame(width: 240, height: 135)
+                            .background(Color.black)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
                     } else {
-                        AsyncItemImage(
-                            itemId: imageId,
-                            imageType: "Primary",
-                            maxWidth: 400
-                        )
-                        .frame(width: 150, height: 225)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        SmartPosterImage(itemIds: fallbackImageIds, maxWidth: 400)
+                            .frame(width: 150, height: 225)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
 
                     if episode.progressPercent > 0 {
