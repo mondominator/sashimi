@@ -421,7 +421,7 @@ final class PlayerViewModel: ObservableObject {
 
     private func checkCurrentSegment(at currentSeconds: Double) {
         // Find if we're currently in any skippable segment
-        let skippableTypes: [MediaSegmentType] = [.intro, .outro, .recap, .commercial, .preview]
+        let skippableTypes: [MediaSegmentType] = [.intro, .outro, .recap, .preview]
         let activeSegment = segments.first { segment in
             skippableTypes.contains(segment.type) &&
             currentSeconds >= segment.startSeconds &&

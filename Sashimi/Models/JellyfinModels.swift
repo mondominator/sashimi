@@ -288,51 +288,26 @@ struct LibraryViewsResponse: Codable {
     }
 }
 
-// MARK: - Media Segments (for skip intro/credits)
+// MARK: - Media Segments (for skip intro/credits via intro-skipper plugin)
 
-struct MediaSegmentDto: Codable, Identifiable {
+struct MediaSegmentDto: Identifiable {
     let id: String
-    let itemId: String
     let type: MediaSegmentType
-    let startTicks: Int64
-    let endTicks: Int64
-
-    enum CodingKeys: String, CodingKey {
-        case id = "Id"
-        case itemId = "ItemId"
-        case type = "Type"
-        case startTicks = "StartTicks"
-        case endTicks = "EndTicks"
-    }
-
-    var startSeconds: Double {
-        Double(startTicks) / 10_000_000
-    }
-
-    var endSeconds: Double {
-        Double(endTicks) / 10_000_000
-    }
+    let startSeconds: Double
+    let endSeconds: Double
 }
 
-enum MediaSegmentType: String, Codable {
-    case intro = "Intro"
-    case outro = "Outro"
-    case commercial = "Commercial"
+enum MediaSegmentType: String {
+    case intro = "Introduction"
+    case outro = "Credits"
     case preview = "Preview"
     case recap = "Recap"
     case unknown
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let rawValue = try container.decode(String.self)
-        self = MediaSegmentType(rawValue: rawValue) ?? .unknown
-    }
 
     var displayName: String {
         switch self {
         case .intro: return "Intro"
         case .outro: return "Credits"
-        case .commercial: return "Ad"
         case .preview: return "Preview"
         case .recap: return "Recap"
         case .unknown: return "Segment"
@@ -340,10 +315,13 @@ enum MediaSegmentType: String, Codable {
     }
 }
 
-struct MediaSegmentsResponse: Codable {
-    let items: [MediaSegmentDto]
+// Intro-skipper plugin response format: {"Introduction": {"Start": 0, "End": 90}, "Credits": {...}}
+struct IntroSkipperSegment: Codable {
+    let start: Double
+    let end: Double
 
     enum CodingKeys: String, CodingKey {
-        case items = "Items"
+        case start = "Start"
+        case end = "End"
     }
 }
