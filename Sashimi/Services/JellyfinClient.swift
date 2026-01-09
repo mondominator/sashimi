@@ -542,6 +542,18 @@ actor JellyfinClient {
 
         return try JSONDecoder().decode(BaseItemDto.self, from: data)
     }
+
+    func getMediaSegments(itemId: String) async throws -> [MediaSegmentDto] {
+        let data = try await request(
+            path: "/MediaSegments",
+            queryItems: [
+                URLQueryItem(name: "itemId", value: itemId)
+            ]
+        )
+
+        let response = try JSONDecoder().decode(MediaSegmentsResponse.self, from: data)
+        return response.items
+    }
 }
 
 enum JellyfinError: LocalizedError {

@@ -287,3 +287,63 @@ struct LibraryViewsResponse: Codable {
         case items = "Items"
     }
 }
+
+// MARK: - Media Segments (for skip intro/credits)
+
+struct MediaSegmentDto: Codable, Identifiable {
+    let id: String
+    let itemId: String
+    let type: MediaSegmentType
+    let startTicks: Int64
+    let endTicks: Int64
+
+    enum CodingKeys: String, CodingKey {
+        case id = "Id"
+        case itemId = "ItemId"
+        case type = "Type"
+        case startTicks = "StartTicks"
+        case endTicks = "EndTicks"
+    }
+
+    var startSeconds: Double {
+        Double(startTicks) / 10_000_000
+    }
+
+    var endSeconds: Double {
+        Double(endTicks) / 10_000_000
+    }
+}
+
+enum MediaSegmentType: String, Codable {
+    case intro = "Intro"
+    case outro = "Outro"
+    case commercial = "Commercial"
+    case preview = "Preview"
+    case recap = "Recap"
+    case unknown
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        self = MediaSegmentType(rawValue: rawValue) ?? .unknown
+    }
+
+    var displayName: String {
+        switch self {
+        case .intro: return "Intro"
+        case .outro: return "Credits"
+        case .commercial: return "Ad"
+        case .preview: return "Preview"
+        case .recap: return "Recap"
+        case .unknown: return "Segment"
+        }
+    }
+}
+
+struct MediaSegmentsResponse: Codable {
+    let items: [MediaSegmentDto]
+
+    enum CodingKeys: String, CodingKey {
+        case items = "Items"
+    }
+}
