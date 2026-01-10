@@ -3,7 +3,6 @@ import SwiftUI
 struct ContinueWatchingRow: View {
     let items: [BaseItemDto]
     let onSelect: (BaseItemDto) -> Void
-    var onSeeAll: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -15,20 +14,6 @@ struct ContinueWatchingRow: View {
                 Image(systemName: "play.circle.fill")
                     .font(.system(size: 38))
                     .foregroundStyle(SashimiTheme.accent)
-
-                Spacer()
-
-                if let onSeeAll = onSeeAll {
-                    Button(action: onSeeAll) {
-                        HStack(spacing: 6) {
-                            Text("See All")
-                            Image(systemName: "chevron.right")
-                        }
-                        .font(.system(size: 22))
-                        .foregroundStyle(SashimiTheme.accent)
-                    }
-                    .buttonStyle(.plain)
-                }
             }
             .padding(.horizontal, 80)
 

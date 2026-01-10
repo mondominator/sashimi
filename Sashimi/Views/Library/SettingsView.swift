@@ -199,39 +199,285 @@ class HomeScreenSettings: ObservableObject {
 
 struct HomeScreenSettingsView: View {
     @StateObject private var settings = HomeScreenSettings.shared
-    @State private var isEditing = false
+    @State private var isLoading = true
 
     var body: some View {
-        List {
-            Section {
-                ForEach(settings.rowConfigs) { config in
-                    HStack {
-                        Button {
-                            settings.toggleVisibility(for: config)
-                        } label: {
-                            Image(systemName: config.isVisible ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(config.isVisible ? .green : .gray)
+        SettingsContainer {
+            if isLoading {
+                ProgressView("Loading...")
+            } else if settings.rowConfigs.isEmpty {
+                VStack(spacing: 20) {
+                    Image(systemName: "square.grid.2x2")
+                        .font(.system(size: 60))
+                        .foregroundStyle(.secondary)
+                    Text("No rows configured")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                    Text("Visit the Home tab first to load your libraries")
+                        .font(.subheadline)
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Home Screen Rows")
+                            .font(.system(size: 38, weight: .bold))
+                            .foregroundStyle(SashimiTheme.textPrimary)
+                            .padding(.bottom, 8)
+
+                        Text("Use arrows to reorder, tap checkmark to show/hide")
+                            .font(.system(size: 18))
+                            .foregroundStyle(SashimiTheme.textSecondary)
+                            .padding(.bottom, 16)
+
+                        ForEach(Array(settings.rowConfigs.enumerated()), id: \.element.id) { index, config in
+                            HomeScreenRowItem(
+                                config: config,
+                                index: index,
+                                totalCount: settings.rowConfigs.count,
+                                onToggle: { settings.toggleVisibility(for: config) },
+                                onMoveUp: { moveRow(from: index, direction: -1) },
+                                onMoveDown: { moveRow(from: index, direction: 1) }
+                            )
                         }
-                        .buttonStyle(.plain)
-
-                        Text(config.displayName)
-                            .foregroundStyle(config.isVisible ? .primary : .secondary)
-
-                        Spacer()
-
-                        Image(systemName: "line.3.horizontal")
-                            .foregroundStyle(.secondary)
                     }
+                    .padding(.horizontal, 60)
+                    .padding(.vertical, 40)
                 }
-                .onMove { source, destination in
-                    settings.moveRow(from: source, to: destination)
-                }
-            } header: {
-                Text("Drag to reorder, tap to show/hide")
             }
         }
-        .navigationTitle("Home Screen Rows")
-        .environment(\.editMode, .constant(.active))
+        .onAppear {
+            if settings.rowConfigs.isEmpty {
+                for type in HomeRowType.allCases {
+                    settings.rowConfigs.append(.builtIn(type))
+                }
+            }
+            isLoading = false
+        }
+    }
+
+    private func moveRow(from index: Int, direction: Int) {
+        let newIndex = index + direction
+        guard newIndex >= 0 && newIndex < settings.rowConfigs.count else { return }
+        settings.rowConfigs.swapAt(index, newIndex)
+        settings.saveSettings()
+    }
+}
+
+struct HomeScreenRowItem: View {
+    let config: HomeRowConfig
+    let index: Int
+    let totalCount: Int
+    let onToggle: () -> Void
+    let onMoveUp: () -> Void
+    let onMoveDown: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Move up button
+            HomeRowMoveButton(
+                direction: .up,
+                isEnabled: index > 0,
+                action: onMoveUp
+            )
+
+            // Move down button
+            HomeRowMoveButton(
+                direction: .down,
+                isEnabled: index < totalCount - 1,
+                action: onMoveDown
+            )
+
+            // Toggle visibility button
+            HomeRowToggleButton(config: config, onToggle: onToggle)
+        }
+    }
+}
+
+enum MoveDirection {
+    case up, down
+
+    var icon: String {
+        switch self {
+        case .up: return "chevron.up"
+        case .down: return "chevron.down"
+        }
+    }
+}
+
+struct HomeRowMoveButton: View {
+    let direction: MoveDirection
+    let isEnabled: Bool
+    let action: () -> Void
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: direction.icon)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(isEnabled ? (isFocused ? .white : SashimiTheme.textSecondary) : SashimiTheme.textTertiary.opacity(0.3))
+                .frame(width: 50, height: 50)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(isFocused ? SashimiTheme.accent : SashimiTheme.cardBackground)
+                )
+        }
+        .buttonStyle(.card)
+        .focused($isFocused)
+        .disabled(!isEnabled)
+    }
+}
+
+struct HomeRowToggleButton: View {
+    let config: HomeRowConfig
+    let onToggle: () -> Void
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 16) {
+                Image(systemName: config.isVisible ? "checkmark.circle.fill" : "circle")
+                    .font(.title2)
+                    .foregroundStyle(config.isVisible ? SashimiTheme.accent : SashimiTheme.textTertiary)
+
+                Text(config.displayName)
+                    .font(.system(size: 22))
+                    .foregroundStyle(config.isVisible ? SashimiTheme.textPrimary : SashimiTheme.textSecondary)
+
+                Spacer()
+
+                if config.type != nil {
+                    Text("Built-in")
+                        .font(.caption)
+                        .foregroundStyle(SashimiTheme.textTertiary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(SashimiTheme.cardBackground.opacity(0.5)))
+                }
+            }
+        }
+        .buttonStyle(.card)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 18)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(isFocused ? SashimiTheme.accent.opacity(0.15) : SashimiTheme.cardBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(SashimiTheme.accent.opacity(isFocused ? 1.0 : 0), lineWidth: 3)
+        )
+        .scaleEffect(isFocused ? 1.02 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
+        .focused($isFocused)
+    }
+}
+
+// MARK: - Settings Container (styled background with width constraint)
+
+struct SettingsContainer<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        ZStack {
+            SashimiTheme.background.ignoresSafeArea()
+
+            content
+                .frame(maxWidth: 900)
+        }
+    }
+}
+
+// MARK: - Custom Settings Row Button Style
+
+struct SettingsRowButtonStyle: ButtonStyle {
+    @FocusState.Binding var isFocused: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(isFocused ? SashimiTheme.accent.opacity(0.2) : SashimiTheme.cardBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(SashimiTheme.accent.opacity(isFocused ? 1.0 : 0), lineWidth: 3)
+            )
+            .scaleEffect(isFocused ? 1.02 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
+    }
+}
+
+// MARK: - Settings Row View (custom focus styling)
+
+struct SettingsRow<Content: View>: View {
+    let action: () -> Void
+    @ViewBuilder let content: () -> Content
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        Button(action: action) {
+            content()
+        }
+        .buttonStyle(PlainNoHighlightButtonStyle())
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isFocused ? SashimiTheme.accent.opacity(0.15) : SashimiTheme.cardBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(SashimiTheme.accent.opacity(isFocused ? 1.0 : 0), lineWidth: 3)
+        )
+        .scaleEffect(isFocused ? 1.02 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
+        .focused($isFocused)
+    }
+}
+
+struct SettingsToggleRow: View {
+    let title: String
+    @Binding var isOn: Bool
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        Button {
+            isOn.toggle()
+        } label: {
+            HStack {
+                Text(title)
+                    .foregroundStyle(SashimiTheme.textPrimary)
+                Spacer()
+                Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(isOn ? SashimiTheme.accent : SashimiTheme.textTertiary)
+            }
+        }
+        .buttonStyle(PlainNoHighlightButtonStyle())
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isFocused ? SashimiTheme.accent.opacity(0.15) : SashimiTheme.cardBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(SashimiTheme.accent.opacity(isFocused ? 1.0 : 0), lineWidth: 3)
+        )
+        .scaleEffect(isFocused ? 1.02 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
+        .focused($isFocused)
     }
 }
 
@@ -256,66 +502,158 @@ struct PlaybackSettingsView: View {
     @StateObject private var settings = PlaybackSettings.shared
 
     var body: some View {
-        List {
-            Section {
-                NavigationLink("Maximum Bitrate") {
-                    VideoQualitySettingsView()
-                }
+        SettingsContainer {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    Text("Playback Settings")
+                        .font(.system(size: 38, weight: .bold))
+                        .foregroundStyle(SashimiTheme.textPrimary)
+                        .padding(.bottom, 8)
 
-                Toggle("Force Direct Play", isOn: $settings.forceDirectPlay)
-            } header: {
-                Text("Video Quality")
-            } footer: {
-                Text("Direct play streams the original file without transcoding. May cause issues with some formats.")
-            }
+                    // Video Quality Section
+                    SettingsSection(title: "Video Quality") {
+                        SettingsNavigationRow(title: "Maximum Bitrate", subtitle: bitrateLabel) {
+                            VideoQualitySettingsView()
+                        }
+                        SettingsToggleRow(title: "Force Direct Play", isOn: $settings.forceDirectPlay)
+                    }
 
-            Section {
-                Toggle("Auto-Play Next Episode", isOn: $settings.autoPlayNextEpisode)
-                Toggle("Auto-Skip Intro", isOn: $settings.autoSkipIntro)
-                Toggle("Auto-Skip Credits", isOn: $settings.autoSkipCredits)
-            } header: {
-                Text("Playback Behavior")
-            } footer: {
-                Text("Auto-skip requires the intro-skipper plugin on your Jellyfin server.")
-            }
+                    Text("Direct play streams the original file without transcoding.")
+                        .font(.system(size: 16))
+                        .foregroundStyle(SashimiTheme.textTertiary)
+                        .padding(.horizontal, 8)
 
-            Section {
-                NavigationLink("Resume Threshold") {
-                    ResumeThresholdSettingsView()
-                }
-            } header: {
-                Text("Resume Playback")
-            } footer: {
-                Text("Only ask to resume if watched more than this amount.")
-            }
+                    // Playback Behavior Section
+                    SettingsSection(title: "Playback Behavior") {
+                        SettingsToggleRow(title: "Auto-Play Next Episode", isOn: $settings.autoPlayNextEpisode)
+                        SettingsToggleRow(title: "Auto-Skip Intro", isOn: $settings.autoSkipIntro)
+                        SettingsToggleRow(title: "Auto-Skip Credits", isOn: $settings.autoSkipCredits)
+                    }
 
-            Section {
-                NavigationLink("Preferred Language") {
-                    LanguagePickerView(
-                        title: "Audio Language",
-                        selection: $settings.preferredAudioLanguage
-                    )
-                }
-            } header: {
-                Text("Audio")
-            }
+                    Text("Auto-skip requires the intro-skipper plugin on your server.")
+                        .font(.system(size: 16))
+                        .foregroundStyle(SashimiTheme.textTertiary)
+                        .padding(.horizontal, 8)
 
-            Section {
-                Toggle("Enable Subtitles", isOn: $settings.subtitlesEnabled)
+                    // Resume Section
+                    SettingsSection(title: "Resume Playback") {
+                        SettingsNavigationRow(title: "Resume Threshold", subtitle: resumeLabel) {
+                            ResumeThresholdSettingsView()
+                        }
+                    }
 
-                if settings.subtitlesEnabled {
-                    NavigationLink("Preferred Language") {
-                        LanguagePickerView(
-                            title: "Subtitle Language",
-                            selection: $settings.preferredSubtitleLanguage
-                        )
+                    // Audio Section
+                    SettingsSection(title: "Audio") {
+                        SettingsNavigationRow(title: "Preferred Language", subtitle: audioLanguageLabel) {
+                            LanguagePickerView(title: "Audio Language", selection: $settings.preferredAudioLanguage)
+                        }
+                    }
+
+                    // Subtitles Section
+                    SettingsSection(title: "Subtitles") {
+                        SettingsToggleRow(title: "Enable Subtitles", isOn: $settings.subtitlesEnabled)
+                        if settings.subtitlesEnabled {
+                            SettingsNavigationRow(title: "Preferred Language", subtitle: subtitleLanguageLabel) {
+                                LanguagePickerView(title: "Subtitle Language", selection: $settings.preferredSubtitleLanguage)
+                            }
+                        }
                     }
                 }
-            } header: {
-                Text("Subtitles")
+                .padding(.horizontal, 60)
+                .padding(.vertical, 40)
             }
         }
-        .navigationTitle("Playback")
+    }
+
+    private var bitrateLabel: String {
+        let bitrate = settings.maxBitrate
+        if bitrate == 0 { return "Auto" }
+        if bitrate >= 1_000_000 { return "\(bitrate / 1_000_000) Mbps" }
+        return "\(bitrate / 1000) Kbps"
+    }
+
+    private var resumeLabel: String {
+        let seconds = settings.resumeThresholdSeconds
+        if seconds == 0 { return "Always ask" }
+        if seconds >= 60 { return "\(seconds / 60) minute\(seconds >= 120 ? "s" : "")" }
+        return "\(seconds) seconds"
+    }
+
+    private var audioLanguageLabel: String {
+        settings.preferredAudioLanguage.isEmpty ? "System Default" : languageName(for: settings.preferredAudioLanguage)
+    }
+
+    private var subtitleLanguageLabel: String {
+        settings.preferredSubtitleLanguage.isEmpty ? "System Default" : languageName(for: settings.preferredSubtitleLanguage)
+    }
+
+    private func languageName(for code: String) -> String {
+        Locale.current.localizedString(forLanguageCode: code) ?? code
+    }
+}
+
+// MARK: - Settings Section Container
+
+struct SettingsSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(SashimiTheme.textSecondary)
+                .padding(.leading, 8)
+
+            VStack(spacing: 8) {
+                content()
+            }
+        }
+    }
+}
+
+// MARK: - Settings Navigation Row
+
+struct SettingsNavigationRow<Destination: View>: View {
+    let title: String
+    var subtitle: String = ""
+    @ViewBuilder let destination: () -> Destination
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        NavigationLink(destination: destination) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 22))
+                    .foregroundStyle(SashimiTheme.textPrimary)
+
+                Spacer()
+
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.system(size: 18))
+                        .foregroundStyle(SashimiTheme.textTertiary)
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(SashimiTheme.textTertiary)
+            }
+        }
+        .buttonStyle(PlainNoHighlightButtonStyle())
+        .padding(.horizontal, 24)
+        .padding(.vertical, 18)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(isFocused ? SashimiTheme.accent.opacity(0.15) : SashimiTheme.cardBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(SashimiTheme.accent.opacity(isFocused ? 1.0 : 0), lineWidth: 3)
+        )
+        .scaleEffect(isFocused ? 1.02 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
+        .focused($isFocused)
     }
 }
 
@@ -333,23 +671,77 @@ struct VideoQualitySettingsView: View {
     ]
 
     var body: some View {
-        List {
-            ForEach(bitrateOptions, id: \.value) { option in
-                Button {
-                    maxBitrate = option.value
-                } label: {
-                    HStack {
-                        Text(option.label)
-                        Spacer()
-                        if maxBitrate == option.value {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(.blue)
+        SettingsContainer {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Video Quality")
+                        .font(.system(size: 38, weight: .bold))
+                        .foregroundStyle(SashimiTheme.textPrimary)
+                        .padding(.bottom, 8)
+
+                    ForEach(bitrateOptions, id: \.value) { option in
+                        SettingsOptionRow(
+                            title: option.label,
+                            isSelected: maxBitrate == option.value
+                        ) {
+                            maxBitrate = option.value
                         }
                     }
                 }
+                .padding(.horizontal, 60)
+                .padding(.vertical, 40)
             }
         }
-        .navigationTitle("Video Quality")
+    }
+}
+
+// MARK: - Settings Option Row (for pickers)
+
+struct SettingsOptionRow: View {
+    let title: String
+    var subtitle: String = ""
+    let isSelected: Bool
+    let action: () -> Void
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 22))
+                        .foregroundStyle(SashimiTheme.textPrimary)
+
+                    if !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(.system(size: 16))
+                            .foregroundStyle(SashimiTheme.textTertiary)
+                    }
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(SashimiTheme.accent)
+                }
+            }
+        }
+        .buttonStyle(PlainNoHighlightButtonStyle())
+        .padding(.horizontal, 24)
+        .padding(.vertical, 18)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(isFocused ? SashimiTheme.accent.opacity(0.15) : SashimiTheme.cardBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(SashimiTheme.accent.opacity(isFocused ? 1.0 : 0), lineWidth: 3)
+        )
+        .scaleEffect(isFocused ? 1.02 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
+        .focused($isFocused)
     }
 }
 
@@ -366,23 +758,32 @@ struct ResumeThresholdSettingsView: View {
     ]
 
     var body: some View {
-        List {
-            ForEach(thresholdOptions, id: \.value) { option in
-                Button {
-                    resumeThresholdSeconds = option.value
-                } label: {
-                    HStack {
-                        Text(option.label)
-                        Spacer()
-                        if resumeThresholdSeconds == option.value {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(.blue)
+        SettingsContainer {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Resume Threshold")
+                        .font(.system(size: 38, weight: .bold))
+                        .foregroundStyle(SashimiTheme.textPrimary)
+                        .padding(.bottom, 8)
+
+                    Text("Only ask to resume if watched more than this amount")
+                        .font(.system(size: 18))
+                        .foregroundStyle(SashimiTheme.textSecondary)
+                        .padding(.bottom, 16)
+
+                    ForEach(thresholdOptions, id: \.value) { option in
+                        SettingsOptionRow(
+                            title: option.label,
+                            isSelected: resumeThresholdSeconds == option.value
+                        ) {
+                            resumeThresholdSeconds = option.value
                         }
                     }
                 }
+                .padding(.horizontal, 60)
+                .padding(.vertical, 40)
             }
         }
-        .navigationTitle("Resume Threshold")
     }
 }
 
@@ -413,23 +814,27 @@ struct LanguagePickerView: View {
     ]
 
     var body: some View {
-        List {
-            ForEach(languages, id: \.code) { language in
-                Button {
-                    selection = language.code
-                } label: {
-                    HStack {
-                        Text(language.name)
-                        Spacer()
-                        if selection == language.code {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(.blue)
+        SettingsContainer {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(title)
+                        .font(.system(size: 38, weight: .bold))
+                        .foregroundStyle(SashimiTheme.textPrimary)
+                        .padding(.bottom, 8)
+
+                    ForEach(languages, id: \.code) { language in
+                        SettingsOptionRow(
+                            title: language.name,
+                            isSelected: selection == language.code
+                        ) {
+                            selection = language.code
                         }
                     }
                 }
+                .padding(.horizontal, 60)
+                .padding(.vertical, 40)
             }
         }
-        .navigationTitle(title)
     }
 }
 
@@ -441,82 +846,87 @@ struct CertificateSettingsView: View {
     @State private var pendingToggle: (() -> Void)?
 
     var body: some View {
-        List {
-            Section {
-                Toggle("Allow Self-Signed Certificates", isOn: Binding(
-                    get: { certSettings.allowSelfSigned },
-                    set: { newValue in
-                        if newValue {
-                            pendingToggle = { certSettings.allowSelfSigned = true }
-                            showingWarning = true
-                        } else {
-                            certSettings.allowSelfSigned = false
-                        }
-                    }
-                ))
+        SettingsContainer {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    Text("Security Settings")
+                        .font(.system(size: 38, weight: .bold))
+                        .foregroundStyle(SashimiTheme.textPrimary)
+                        .padding(.bottom, 8)
 
-                Toggle("Allow Expired Certificates", isOn: Binding(
-                    get: { certSettings.allowExpiredCerts },
-                    set: { newValue in
-                        if newValue {
-                            pendingToggle = { certSettings.allowExpiredCerts = true }
-                            showingWarning = true
-                        } else {
-                            certSettings.allowExpiredCerts = false
-                        }
-                    }
-                ))
-            } header: {
-                Text("Certificate Validation")
-            } footer: {
-                Text("⚠️ Disabling certificate validation reduces security. Only enable these options if you understand the risks and trust your network.")
-            }
+                    // Certificate Validation Section
+                    SettingsSection(title: "Certificate Validation") {
+                        SettingsToggleRow(
+                            title: "Allow Self-Signed Certificates",
+                            isOn: Binding(
+                                get: { certSettings.allowSelfSigned },
+                                set: { newValue in
+                                    if newValue {
+                                        pendingToggle = { certSettings.allowSelfSigned = true }
+                                        showingWarning = true
+                                    } else {
+                                        certSettings.allowSelfSigned = false
+                                    }
+                                }
+                            )
+                        )
 
-            if !certSettings.trustedHosts.isEmpty {
-                Section {
-                    ForEach(Array(certSettings.trustedHosts).sorted(), id: \.self) { host in
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(host)
-                                    .font(.body)
-                                Text("Manually trusted")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                        SettingsToggleRow(
+                            title: "Allow Expired Certificates",
+                            isOn: Binding(
+                                get: { certSettings.allowExpiredCerts },
+                                set: { newValue in
+                                    if newValue {
+                                        pendingToggle = { certSettings.allowExpiredCerts = true }
+                                        showingWarning = true
+                                    } else {
+                                        certSettings.allowExpiredCerts = false
+                                    }
+                                }
+                            )
+                        )
+                    }
+
+                    Text("Disabling certificate validation reduces security. Only enable if you trust your network.")
+                        .font(.system(size: 16))
+                        .foregroundStyle(SashimiTheme.textTertiary)
+                        .padding(.horizontal, 8)
+
+                    // Trusted Hosts Section
+                    if !certSettings.trustedHosts.isEmpty {
+                        SettingsSection(title: "Trusted Hosts") {
+                            ForEach(Array(certSettings.trustedHosts).sorted(), id: \.self) { host in
+                                TrustedHostRow(host: host) {
+                                    certSettings.untrustHost(host)
+                                }
                             }
-                            Spacer()
-                            Button(role: .destructive) {
-                                certSettings.untrustHost(host)
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.red)
-                            }
-                            .buttonStyle(.plain)
                         }
+
+                        Text("These hosts have been manually trusted.")
+                            .font(.system(size: 16))
+                            .foregroundStyle(SashimiTheme.textTertiary)
+                            .padding(.horizontal, 8)
                     }
-                } header: {
-                    Text("Trusted Hosts")
-                } footer: {
-                    Text("These hosts have been manually trusted. Remove them to require valid certificates.")
-                }
-            }
 
-            Section {
-                HStack {
-                    Image(systemName: "lock.shield")
-                        .foregroundStyle(.green)
-                    Text("HTTPS connections are always encrypted")
-                }
+                    // Security Status Section
+                    SettingsSection(title: "Security Status") {
+                        SecurityStatusRow(
+                            icon: "lock.shield",
+                            iconColor: .green,
+                            text: "HTTPS connections are always encrypted"
+                        )
 
-                HStack {
-                    Image(systemName: certSettings.allowSelfSigned ? "exclamationmark.triangle" : "checkmark.shield")
-                        .foregroundStyle(certSettings.allowSelfSigned ? .yellow : .green)
-                    Text(certSettings.allowSelfSigned ? "Self-signed certificates accepted" : "Only trusted certificates accepted")
+                        SecurityStatusRow(
+                            icon: certSettings.allowSelfSigned ? "exclamationmark.triangle" : "checkmark.shield",
+                            iconColor: certSettings.allowSelfSigned ? .yellow : .green,
+                            text: certSettings.allowSelfSigned ? "Self-signed certificates accepted" : "Only trusted certificates accepted"
+                        )
+                    }
                 }
-            } header: {
-                Text("Current Security Status")
+                .padding(.horizontal, 60)
+                .padding(.vertical, 40)
             }
         }
-        .navigationTitle("Certificate Settings")
         .confirmationDialog(
             "Security Warning",
             isPresented: $showingWarning,
@@ -530,8 +940,75 @@ struct CertificateSettingsView: View {
                 pendingToggle = nil
             }
         } message: {
-            Text("Enabling this setting reduces the security of your connection. Man-in-the-middle attacks become possible. Only enable this if you are connecting to a trusted local server with a self-signed certificate.")
+            Text("Enabling this setting reduces the security of your connection. Man-in-the-middle attacks become possible.")
         }
+    }
+}
+
+struct TrustedHostRow: View {
+    let host: String
+    let onRemove: () -> Void
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        Button(action: onRemove) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(host)
+                        .font(.system(size: 22))
+                        .foregroundStyle(SashimiTheme.textPrimary)
+                    Text("Tap to remove")
+                        .font(.system(size: 16))
+                        .foregroundStyle(SashimiTheme.textTertiary)
+                }
+
+                Spacer()
+
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.red.opacity(0.8))
+            }
+        }
+        .buttonStyle(PlainNoHighlightButtonStyle())
+        .padding(.horizontal, 24)
+        .padding(.vertical, 18)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(isFocused ? SashimiTheme.accent.opacity(0.15) : SashimiTheme.cardBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(SashimiTheme.accent.opacity(isFocused ? 1.0 : 0), lineWidth: 3)
+        )
+        .scaleEffect(isFocused ? 1.02 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
+        .focused($isFocused)
+    }
+}
+
+struct SecurityStatusRow: View {
+    let icon: String
+    let iconColor: Color
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundStyle(iconColor)
+
+            Text(text)
+                .font(.system(size: 20))
+                .foregroundStyle(SashimiTheme.textPrimary)
+
+            Spacer()
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 18)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(SashimiTheme.cardBackground)
+        )
     }
 }
 
@@ -632,68 +1109,91 @@ struct ParentalControlsView: View {
     @State private var pendingAction: (() -> Void)?
 
     var body: some View {
-        List {
-            Section {
-                Toggle("Enable PIN Lock", isOn: Binding(
-                    get: { controls.isPINEnabled },
-                    set: { newValue in
-                        if newValue {
-                            showPINSetup = true
-                        } else {
-                            // Verify PIN before disabling
-                            pendingAction = { controls.disablePIN() }
-                            showPINVerify = true
-                        }
-                    }
-                ))
+        SettingsContainer {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    Text("Parental Controls")
+                        .font(.system(size: 38, weight: .bold))
+                        .foregroundStyle(SashimiTheme.textPrimary)
+                        .padding(.bottom, 8)
 
-                if controls.isPINEnabled {
-                    Button("Change PIN") {
-                        pendingAction = { showPINSetup = true }
-                        showPINVerify = true
-                    }
-                }
-            } header: {
-                Text("PIN Protection")
-            } footer: {
-                Text("PIN protects access to settings and adult content.")
-            }
+                    // PIN Protection Section
+                    SettingsSection(title: "PIN Protection") {
+                        SettingsToggleRow(
+                            title: "Enable PIN Lock",
+                            isOn: Binding(
+                                get: { controls.isPINEnabled },
+                                set: { newValue in
+                                    if newValue {
+                                        showPINSetup = true
+                                    } else {
+                                        pendingAction = { controls.disablePIN() }
+                                        showPINVerify = true
+                                    }
+                                }
+                            )
+                        )
 
-            Section {
-                NavigationLink("Maximum Content Rating") {
-                    ContentRatingPickerView()
-                }
-
-                Toggle("Hide Unrated Content", isOn: $controls.hideUnrated)
-            } header: {
-                Text("Content Restrictions")
-            } footer: {
-                Text("Content above the selected rating will be hidden. Currently set to: \(controls.maxContentRating.displayName)")
-            }
-
-            Section {
-                Toggle("Kids Mode", isOn: Binding(
-                    get: { controls.kidsMode },
-                    set: { newValue in
-                        if !newValue && controls.isPINEnabled {
-                            // Require PIN to disable kids mode
-                            pendingAction = { controls.kidsMode = false }
-                            showPINVerify = true
-                        } else {
-                            controls.kidsMode = newValue
-                            if newValue {
-                                controls.maxContentRating = .g
+                        if controls.isPINEnabled {
+                            SettingsActionRow(title: "Change PIN", icon: "key") {
+                                pendingAction = { showPINSetup = true }
+                                showPINVerify = true
                             }
                         }
                     }
-                ))
-            } header: {
-                Text("Kids Mode")
-            } footer: {
-                Text("Kids Mode shows only G-rated content and simplifies the interface. Requires PIN to exit.")
+
+                    Text("PIN protects access to settings and adult content.")
+                        .font(.system(size: 16))
+                        .foregroundStyle(SashimiTheme.textTertiary)
+                        .padding(.horizontal, 8)
+
+                    // Content Restrictions Section
+                    SettingsSection(title: "Content Restrictions") {
+                        SettingsNavigationRow(
+                            title: "Maximum Content Rating",
+                            subtitle: controls.maxContentRating.rawValue
+                        ) {
+                            ContentRatingPickerView()
+                        }
+
+                        SettingsToggleRow(title: "Hide Unrated Content", isOn: $controls.hideUnrated)
+                    }
+
+                    Text("Content above the selected rating will be hidden.")
+                        .font(.system(size: 16))
+                        .foregroundStyle(SashimiTheme.textTertiary)
+                        .padding(.horizontal, 8)
+
+                    // Kids Mode Section
+                    SettingsSection(title: "Kids Mode") {
+                        SettingsToggleRow(
+                            title: "Enable Kids Mode",
+                            isOn: Binding(
+                                get: { controls.kidsMode },
+                                set: { newValue in
+                                    if !newValue && controls.isPINEnabled {
+                                        pendingAction = { controls.kidsMode = false }
+                                        showPINVerify = true
+                                    } else {
+                                        controls.kidsMode = newValue
+                                        if newValue {
+                                            controls.maxContentRating = .g
+                                        }
+                                    }
+                                }
+                            )
+                        )
+                    }
+
+                    Text("Kids Mode shows only G-rated content. Requires PIN to exit.")
+                        .font(.system(size: 16))
+                        .foregroundStyle(SashimiTheme.textTertiary)
+                        .padding(.horizontal, 8)
+                }
+                .padding(.horizontal, 60)
+                .padding(.vertical, 40)
             }
         }
-        .navigationTitle("Parental Controls")
         .sheet(isPresented: $showPINSetup) {
             PINSetupView { pin in
                 controls.setPIN(pin)
@@ -712,33 +1212,76 @@ struct ParentalControlsView: View {
     }
 }
 
+struct SettingsActionRow: View {
+    let title: String
+    var icon: String = ""
+    let action: () -> Void
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 22))
+                    .foregroundStyle(SashimiTheme.textPrimary)
+
+                Spacer()
+
+                if !icon.isEmpty {
+                    Image(systemName: icon)
+                        .font(.system(size: 20))
+                        .foregroundStyle(SashimiTheme.textTertiary)
+                }
+            }
+        }
+        .buttonStyle(PlainNoHighlightButtonStyle())
+        .padding(.horizontal, 24)
+        .padding(.vertical, 18)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(isFocused ? SashimiTheme.accent.opacity(0.15) : SashimiTheme.cardBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(SashimiTheme.accent.opacity(isFocused ? 1.0 : 0), lineWidth: 3)
+        )
+        .scaleEffect(isFocused ? 1.02 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
+        .focused($isFocused)
+    }
+}
+
 struct ContentRatingPickerView: View {
     @AppStorage("maxContentRating") private var maxContentRating: ContentRating = .any
 
     var body: some View {
-        List {
-            ForEach(ContentRating.allCases, id: \.rawValue) { rating in
-                Button {
-                    maxContentRating = rating
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(rating.rawValue)
-                                .font(.headline)
-                            Text(rating.displayName)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if maxContentRating == rating {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(.blue)
+        SettingsContainer {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Content Rating")
+                        .font(.system(size: 38, weight: .bold))
+                        .foregroundStyle(SashimiTheme.textPrimary)
+                        .padding(.bottom, 8)
+
+                    Text("Content above the selected rating will be hidden")
+                        .font(.system(size: 18))
+                        .foregroundStyle(SashimiTheme.textSecondary)
+                        .padding(.bottom, 16)
+
+                    ForEach(ContentRating.allCases, id: \.rawValue) { rating in
+                        SettingsOptionRow(
+                            title: rating.rawValue,
+                            subtitle: rating.displayName,
+                            isSelected: maxContentRating == rating
+                        ) {
+                            maxContentRating = rating
                         }
                     }
                 }
+                .padding(.horizontal, 60)
+                .padding(.vertical, 40)
             }
         }
-        .navigationTitle("Content Rating")
     }
 }
 

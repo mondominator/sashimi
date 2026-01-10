@@ -156,10 +156,7 @@ struct HomeView: View {
                         onSelect: { item in
                             selectedItemIsYouTube = false
                             selectedItem = item
-                        },
-                        onSeeAll: viewModel.continueWatchingItems.count > 5 ? {
-                            showContinueWatchingDetail = true
-                        } : nil
+                        }
                     )
                     .focusSection()
                 }
@@ -329,28 +326,6 @@ struct HeroSection: View {
                     Spacer()
                 }
 
-                // Navigation arrows (shown when focused and multiple items)
-                if items.count > 1 && isFocused {
-                    HStack {
-                        // Left arrow
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 36, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.8))
-                            .shadow(color: .black.opacity(0.5), radius: 4)
-                            .padding(.leading, 60)
-
-                        Spacer()
-
-                        // Right arrow
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 36, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.8))
-                            .shadow(color: .black.opacity(0.5), radius: 4)
-                            .padding(.trailing, 60)
-                    }
-                    .transition(.opacity)
-                    .animation(.easeInOut(duration: 0.2), value: isFocused)
-                }
 
                 // Content
                 VStack(alignment: .leading, spacing: 16) {
