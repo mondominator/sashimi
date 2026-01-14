@@ -777,6 +777,15 @@ struct MediaDetailView: View {
                     }
                 }
                 .focusSection()
+            } else if selectedSeason != nil {
+                // Empty state when season has no episodes
+                EmptyStateView(
+                    icon: "tv",
+                    title: "No Episodes",
+                    message: "This season has no episodes"
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: 200)
             }
         }
     }
