@@ -584,9 +584,10 @@ struct MediaDetailView: View {
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(Color.white.opacity(isMoreButtonFocused ? 0.6 : 0), lineWidth: 2)
+                        .stroke(isMoreButtonFocused ? SashimiTheme.accent : .clear, lineWidth: 3)
                 )
-                .scaleEffect(isMoreButtonFocused ? 1.10 : 1.0)
+                .shadow(color: isMoreButtonFocused ? SashimiTheme.focusGlow : .clear, radius: 12)
+                .scaleEffect(isMoreButtonFocused ? 1.05 : 1.0)
                 .animation(.spring(response: 0.3), value: isMoreButtonFocused)
             }
             .focused($isMoreButtonFocused)
@@ -897,9 +898,10 @@ struct ActionButton: View {
             .clipShape(Capsule())
             .overlay(
                 Capsule()
-                    .stroke(Color.white.opacity(isFocused ? 0.6 : 0), lineWidth: 2)
+                    .stroke(isFocused ? SashimiTheme.accent : .clear, lineWidth: 3)
             )
-            .scaleEffect(isFocused ? 1.10 : 1.0)
+            .shadow(color: isFocused ? SashimiTheme.focusGlow : .clear, radius: 12)
+            .scaleEffect(isFocused ? 1.05 : 1.0)
             .animation(.spring(response: 0.3), value: isFocused)
         }
         .buttonStyle(PlainNoHighlightButtonStyle())
@@ -928,9 +930,10 @@ struct SeasonTab: View {
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(SashimiTheme.highlight.opacity(isFocused ? 0.8 : 0), lineWidth: 2)
+                        .stroke(isFocused ? SashimiTheme.accent : .clear, lineWidth: 3)
                 )
-                .scaleEffect(isFocused ? 1.10 : 1.0)
+                .shadow(color: isFocused ? SashimiTheme.focusGlow : .clear, radius: 10)
+                .scaleEffect(isFocused ? 1.05 : 1.0)
                 .animation(.spring(response: 0.3), value: isFocused)
         }
         .buttonStyle(PlainNoHighlightButtonStyle())
@@ -1049,8 +1052,9 @@ struct EpisodeCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(isFocused ? SashimiTheme.highlight : .clear, lineWidth: 2)
+                        .stroke(isFocused ? SashimiTheme.accent : .clear, lineWidth: 3)
                 )
+                .shadow(color: isFocused ? SashimiTheme.focusGlow : .clear, radius: 12)
 
                 VStack(alignment: .leading, spacing: 4) {
                     MarqueeText(
@@ -1075,7 +1079,7 @@ struct EpisodeCard: View {
                 }
                 .frame(width: showEpisodeThumbnail ? 240 : 150, alignment: .leading)
             }
-            .scaleEffect(isFocused ? 1.10 : 1.0)
+            .scaleEffect(isFocused ? 1.05 : 1.0)
             .animation(.spring(response: 0.3), value: isFocused)
         }
         .buttonStyle(PlainNoHighlightButtonStyle())

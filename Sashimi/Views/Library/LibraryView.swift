@@ -106,7 +106,7 @@ struct LibraryCardButton: View {
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(isFocused ? SashimiTheme.accent : .clear, lineWidth: 4)
                 )
-                .shadow(color: isFocused ? SashimiTheme.accent.opacity(0.6) : .clear, radius: 20)
+                .shadow(color: isFocused ? SashimiTheme.focusGlow : .clear, radius: 15)
 
                 Text(library.name)
                     .font(.system(size: 24, weight: .medium))
@@ -158,6 +158,7 @@ struct LibraryRowButton: View {
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(isFocused ? SashimiTheme.accent : .clear, lineWidth: 4)
             )
+            .shadow(color: isFocused ? SashimiTheme.focusGlow : .clear, radius: 15)
             .scaleEffect(isFocused ? 1.02 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
         }
