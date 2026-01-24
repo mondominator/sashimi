@@ -147,6 +147,7 @@ struct UserItemDataDto: Codable {
     let isFavorite: Bool?
     let played: Bool?
     let lastPlayedDate: String?
+    let unplayedItemCount: Int?
 
     enum CodingKeys: String, CodingKey {
         case playbackPositionTicks = "PlaybackPositionTicks"
@@ -154,6 +155,7 @@ struct UserItemDataDto: Codable {
         case isFavorite = "IsFavorite"
         case played = "Played"
         case lastPlayedDate = "LastPlayedDate"
+        case unplayedItemCount = "UnplayedItemCount"
     }
 }
 

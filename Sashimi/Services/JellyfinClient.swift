@@ -293,7 +293,7 @@ actor JellyfinClient {
             path: "/Users/\(userId)/Items/Resume",
             queryItems: [
                 URLQueryItem(name: "Limit", value: "\(limit)"),
-                URLQueryItem(name: "Fields", value: "Overview,PrimaryImageAspectRatio,CommunityRating,OfficialRating,Genres,Taglines,ParentBackdropImageTags,UserData"),
+                URLQueryItem(name: "Fields", value: "Overview,PrimaryImageAspectRatio,CommunityRating,OfficialRating,Genres,Taglines,ParentBackdropImageTags,UserData,Path"),
                 URLQueryItem(name: "EnableImageTypes", value: "Primary,Backdrop,Thumb"),
                 URLQueryItem(name: "Recursive", value: "true")
             ]
@@ -311,7 +311,7 @@ actor JellyfinClient {
             queryItems: [
                 URLQueryItem(name: "UserId", value: userId),
                 URLQueryItem(name: "Limit", value: "\(limit)"),
-                URLQueryItem(name: "Fields", value: "Overview,PrimaryImageAspectRatio,CommunityRating,OfficialRating,Genres,Taglines,UserData,ParentBackdropImageTags"),
+                URLQueryItem(name: "Fields", value: "Overview,PrimaryImageAspectRatio,CommunityRating,OfficialRating,Genres,Taglines,UserData,ParentBackdropImageTags,Path"),
                 URLQueryItem(name: "EnableImageTypes", value: "Primary,Backdrop,Thumb"),
                 URLQueryItem(name: "EnableRewatching", value: "false"),
                 URLQueryItem(name: "DisableFirstEpisode", value: "false")
@@ -449,11 +449,14 @@ actor JellyfinClient {
         return try JSONDecoder().decode(ItemsResponse.self, from: data)
     }
 
-    func getPlaybackInfo(itemId: String) async throws -> PlaybackInfoResponse {
+    func getPlaybackInfo(itemId: String, maxBitrate: Int? = nil) async throws -> PlaybackInfoResponse {
         guard let userId else { throw JellyfinError.notConfigured }
 
+        // Default to 120 Mbps (essentially unlimited), or use specified bitrate
+        let streamingBitrate = maxBitrate ?? 120_000_000
+
         let deviceProfile: [String: Any] = [
-            "MaxStreamingBitrate": 120000000,
+            "MaxStreamingBitrate": streamingBitrate,
             "MaxStaticBitrate": 100000000,
             "MusicStreamingTranscodingBitrate": 384000,
             "DirectPlayProfiles": [
@@ -764,7 +767,7 @@ actor JellyfinClient {
         let data = try await request(
             path: "/Users/\(userId)/Items/\(itemId)",
             queryItems: [
-                URLQueryItem(name: "Fields", value: "Overview,PrimaryImageAspectRatio,CommunityRating,OfficialRating,Genres,Taglines,People,UserData,Chapters"),
+                URLQueryItem(name: "Fields", value: "Overview,PrimaryImageAspectRatio,CommunityRating,OfficialRating,Genres,Taglines,People,UserData,Chapters,ParentBackdropImageTags"),
                 URLQueryItem(name: "EnableImageTypes", value: "Primary,Backdrop,Thumb")
             ]
         )

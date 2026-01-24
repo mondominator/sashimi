@@ -32,6 +32,33 @@ struct SubtitleTrackOption: Identifiable, Hashable {
     }
 }
 
+enum QualityOption: String, CaseIterable, Identifiable {
+    case auto = "auto"
+    case quality1080p = "1080"
+    case quality720p = "720"
+    case quality480p = "480"
+    
+    var id: String { rawValue }
+    
+    var displayName: String {
+        switch self {
+        case .auto: return "Auto"
+        case .quality1080p: return "1080p"
+        case .quality720p: return "720p"
+        case .quality480p: return "480p"
+        }
+    }
+    
+    var maxBitrate: Int? {
+        switch self {
+        case .auto: return nil  // No limit
+        case .quality1080p: return 20_000_000  // 20 Mbps
+        case .quality720p: return 8_000_000   // 8 Mbps
+        case .quality480p: return 4_000_000   // 4 Mbps
+        }
+    }
+}
+
 @MainActor
 final class PlayerViewModel: ObservableObject {
     @Published var player: AVPlayer?
@@ -49,6 +76,7 @@ final class PlayerViewModel: ObservableObject {
     @Published var nextEpisode: BaseItemDto?
     @Published var showingUpNext = false
     @Published var resumePositionTicks: Int64 = 0
+    @Published var selectedQuality: QualityOption = .auto
 
     // Track when playback actually started (for quick-exit protection)
     private var playbackStartDate: Date?
@@ -82,7 +110,7 @@ final class PlayerViewModel: ObservableObject {
             let freshItem = try await client.getItem(itemId: item.id)
             currentItem = freshItem
 
-            let playbackInfo = try await client.getPlaybackInfo(itemId: freshItem.id)
+            let playbackInfo = try await client.getPlaybackInfo(itemId: freshItem.id, maxBitrate: selectedQuality.maxBitrate)
 
             guard let mediaSource = playbackInfo.mediaSources?.first else {
                 throw PlayerError.noMediaSource
@@ -301,6 +329,123 @@ final class PlayerViewModel: ObservableObject {
         playbackEnded = true
     }
 
+    func changeQuality(_ quality: QualityOption) async {
+        guard let item = currentItem else { return }
+
+        // Save current position
+        let currentPosition = player?.currentItem?.currentTime()
+        let positionTicks = currentPosition.map { Int64($0.seconds * 10_000_000) } ?? 0
+
+        // Update quality setting
+        selectedQuality = quality
+
+        // Stop current playback
+        player?.pause()
+        progressReportTask?.cancel()
+        cleanupSegmentTracking()
+        subtitleManager.clear()
+
+        if let endObserver {
+            NotificationCenter.default.removeObserver(endObserver)
+            self.endObserver = nil
+        }
+
+        player = nil
+        isLoading = true
+
+        // Reload with new quality
+        do {
+            let playbackInfo = try await client.getPlaybackInfo(itemId: item.id, maxBitrate: quality.maxBitrate)
+
+            guard let mediaSource = playbackInfo.mediaSources?.first else {
+                throw PlayerError.noMediaSource
+            }
+
+            currentMediaSource = mediaSource
+
+            let url: URL?
+            if let transcodingPath = mediaSource.transcodingUrl, !transcodingPath.isEmpty {
+                url = await client.buildURL(path: transcodingPath)
+            } else if let directPath = mediaSource.directStreamUrl, !directPath.isEmpty {
+                url = await client.buildURL(path: directPath)
+            } else {
+                url = await client.getPlaybackURL(itemId: item.id, mediaSourceId: mediaSource.id, container: mediaSource.container)
+            }
+
+            guard let url else {
+                throw PlayerError.noStreamURL
+            }
+
+            let asset = AVURLAsset(url: url)
+            let playerItem = AVPlayerItem(asset: asset)
+
+            // Set up chapter markers
+            if let chapters = item.chapters, !chapters.isEmpty,
+               let runTimeTicks = item.runTimeTicks {
+                let duration = Double(runTimeTicks) / 10_000_000.0
+                setupChapterMarkers(on: playerItem, chapters: chapters, duration: duration)
+            }
+
+            errorObserver = playerItem.observe(\.status) { [weak self] item, _ in
+                Task { @MainActor in
+                    if item.status == .failed {
+                        self?.errorMessage = item.error?.localizedDescription ?? "Unknown playback error"
+                        self?.error = item.error
+                    }
+                }
+            }
+
+            player = AVPlayer(playerItem: playerItem)
+            player?.volume = 1.0
+            player?.isMuted = false
+
+            statusObserver = player?.observe(\.status) { [weak self] player, _ in
+                Task { @MainActor in
+                    if player.status == .failed {
+                        self?.errorMessage = player.error?.localizedDescription ?? "Player failed"
+                        self?.error = player.error
+                    }
+                }
+            }
+
+            rateObserver = player?.observe(\.timeControlStatus) { [weak self] _, _ in
+                Task { @MainActor in
+                    await self?.reportProgress()
+                }
+            }
+
+            endObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: playerItem,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    await self?.handlePlaybackEnded()
+                }
+            }
+
+            isLoading = false
+
+            // Seek to saved position
+            if positionTicks > 0 {
+                let seekTime = CMTime(value: positionTicks / 10000, timescale: 1000)
+                await player?.seek(to: seekTime)
+            }
+
+            // Resume playback and tracking
+            startProgressReporting()
+            setupSegmentTracking()
+            player?.play()
+
+        } catch {
+            self.error = error
+            self.errorMessage = error.localizedDescription
+            isLoading = false
+        }
+    }
+
+
+
     func stop() async {
         progressReportTask?.cancel()
         cleanupSegmentTracking()
@@ -326,12 +471,6 @@ final class PlayerViewModel: ObservableObject {
                 positionTicks = Int64(currentTime.seconds * 10_000_000)
             }
 
-            // Cap position at 90% to prevent Jellyfin from auto-marking as watched
-            // when user manually exits near the end. Only handlePlaybackEnded should mark as watched.
-            if let totalTicks = item.runTimeTicks, totalTicks > 0 {
-                let maxTicks = Int64(Double(totalTicks) * 0.90)
-                positionTicks = min(positionTicks, maxTicks)
-            }
 
             try? await client.reportPlaybackStopped(itemId: item.id, positionTicks: positionTicks)
         }

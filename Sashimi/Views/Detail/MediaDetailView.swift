@@ -45,14 +45,27 @@ struct MediaDetailView: View {
         if forceYouTubeStyle { return true }
         // Videos are always YouTube-style
         if isVideo { return true }
-        // Episodes without parent backdrops are YouTube-style (from Pinchflat)
-        if isEpisode && !seriesHasBackdrop { return true }
+        // Episodes with landscape primary image (aspect ratio > 1) are YouTube-style
+        if isEpisode {
+            if let aspectRatio = item.primaryImageAspectRatio, aspectRatio > 1.0 {
+                return true
+            }
+            // Fallback: no parent backdrops or youtube in path
+            if !seriesHasBackdrop || (item.path?.lowercased().contains("youtube") ?? false) {
+                return true
+            }
+        }
         return false
     }
 
     // YouTube series (channels) should show circular art like in the library list
     private var isYouTubeSeriesStyle: Bool {
         isSeries && forceYouTubeStyle
+    }
+    
+    // Episode from YouTube library - show circular channel art instead of series logo
+    private var isYouTubeChannelEpisode: Bool {
+        isEpisode && (forceYouTubeStyle || (item.path?.lowercased().contains("youtube") ?? false))
     }
 
     // Check if series has backdrop images available
@@ -93,7 +106,7 @@ struct MediaDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                Spacer().frame(height: 100)
+                Spacer().frame(height: isEpisode ? 40 : 100)
                 mainContentSection
             }
         }
@@ -224,12 +237,20 @@ struct MediaDetailView: View {
     // MARK: - Main Content
     private var mainContentSection: some View {
         VStack(alignment: .leading, spacing: 30) {
-            HStack(alignment: .top, spacing: 40) {
-                posterSection
-                infoSection
+            if isEpisode {
+                // Episode layout: logo above title, no poster
+                episodeHeaderSection
+                    .padding(.horizontal, 60)
+                    .focusSection()
+            } else {
+                // Movie/Series layout: poster + info side by side
+                HStack(alignment: .top, spacing: 40) {
+                    posterSection
+                    infoSection
+                }
+                .padding(.horizontal, 60)
+                .focusSection()
             }
-            .padding(.horizontal, 60)
-            .focusSection()
 
             if let overview = item.overview {
                 Text(overview)
@@ -253,6 +274,60 @@ struct MediaDetailView: View {
             Spacer().frame(height: 80)
         }
     }
+
+    // MARK: - Episode Header (with series logo or YouTube channel art)
+    private var episodeHeaderSection: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            if isYouTubeChannelEpisode {
+                // YouTube: circular channel art
+                if let seriesId = item.seriesId {
+                    HStack(spacing: 20) {
+                        Circle()
+                            .fill(SashimiTheme.cardBackground)
+                            .frame(width: 120, height: 120)
+                            .overlay(
+                                AsyncItemImage(
+                                    itemId: seriesId,
+                                    imageType: "Primary",
+                                    maxWidth: 240,
+                                    contentMode: .fill,
+                                    fallbackImageTypes: ["Thumb"]
+                                )
+                                .clipShape(Circle())
+                            )
+                        
+                        if let seriesName = item.seriesName {
+                            Text(seriesName)
+                                .font(.system(size: 28, weight: .semibold))
+                                .foregroundStyle(SashimiTheme.textSecondary)
+                        }
+                    }
+                }
+            } else {
+                // Regular TV: series logo
+                if let seriesId = item.seriesId {
+                    AsyncItemImage(
+                        itemId: seriesId,
+                        imageType: "Logo",
+                        maxWidth: 1400,
+                        contentMode: .fit,
+                        fallbackImageTypes: []
+                    )
+                    .frame(maxHeight: 220, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .clipped()
+                } else if let seriesName = item.seriesName {
+                    // Fallback: show series name as text if no logo
+                    Text(seriesName)
+                        .font(.system(size: 36, weight: .bold))
+                        .foregroundStyle(SashimiTheme.textSecondary)
+                }
+            }
+            
+            infoSection
+        }
+    }
+
 
     // MARK: - Poster
 
@@ -361,16 +436,8 @@ struct MediaDetailView: View {
                                 .stroke(SashimiTheme.textSecondary, lineWidth: 1.5)
                         )
                 }
-            }
-
-            if let genres = item.genres, !genres.isEmpty {
-                Text(genres.prefix(4).joined(separator: " • "))
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(SashimiTheme.textSecondary)
-            }
-
-            if let info = mediaInfo {
-                HStack(spacing: 12) {
+                
+                if let info = mediaInfo {
                     if let resolution = info.videoResolution {
                         mediaInfoBadge(resolution)
                     }
@@ -381,6 +448,12 @@ struct MediaDetailView: View {
                         audioInfoBadge(codec: audioCodec, channels: channels)
                     }
                 }
+            }
+
+            if let genres = item.genres, !genres.isEmpty {
+                Text(genres.prefix(4).joined(separator: " • "))
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(SashimiTheme.textSecondary)
             }
 
             Spacer()
@@ -517,23 +590,26 @@ struct MediaDetailView: View {
     // MARK: - Action Buttons
     private var actionButtonsRow: some View {
         HStack(spacing: 20) {
-            ActionButton(
-                title: hasProgress ? "Resume" : "Play",
-                icon: "play.fill",
-                isPrimary: true
-            ) {
-                startFromBeginning = false
-                showingPlayer = true
-            }
-
-            if hasProgress {
+            // Only show play buttons for playable content (not series)
+            if !isSeries {
                 ActionButton(
-                    title: "Start Over",
-                    icon: "arrow.counterclockwise",
-                    isPrimary: false
+                    title: hasProgress ? "Resume" : "Play",
+                    icon: "play.fill",
+                    isPrimary: true
                 ) {
-                    startFromBeginning = true
+                    startFromBeginning = false
                     showingPlayer = true
+                }
+
+                if hasProgress {
+                    ActionButton(
+                        title: "Start Over",
+                        icon: "arrow.counterclockwise",
+                        isPrimary: false
+                    ) {
+                        startFromBeginning = true
+                        showingPlayer = true
+                    }
                 }
             }
 

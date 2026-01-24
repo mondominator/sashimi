@@ -92,9 +92,10 @@ struct HomeView: View {
                 ContinueWatchingDetailView(
                     items: viewModel.continueWatchingItems,
                     onSelect: { item in
+                        let isYouTube = item.type == .episode && (item.parentBackdropImageTags ?? []).isEmpty
                         showContinueWatchingDetail = false
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            selectedItemIsYouTube = false
+                            selectedItemIsYouTube = isYouTube
                             selectedItem = item
                         }
                     }
@@ -155,6 +156,7 @@ struct HomeView: View {
                             selectedItem = item
                         }
                     )
+                    .padding(.top, 60)
                     .focusSection()
                 }
             case .continueWatching:
@@ -162,7 +164,10 @@ struct HomeView: View {
                     ContinueWatchingRow(
                         items: viewModel.continueWatchingItems,
                         onSelect: { item in
-                            selectedItemIsYouTube = false
+                            // Check if item comes from a library named YouTube
+                            let libraryName = viewModel.continueWatchingLibraryNames[item.id] ?? ""
+                            let isYouTube = libraryName.lowercased().contains("youtube")
+                            selectedItemIsYouTube = isYouTube
                             selectedItem = item
                         },
                         onPlay: { item in
@@ -535,13 +540,14 @@ struct RecentlyAddedLibraryRow: View {
                     LazyHStack(spacing: isYouTubeLibrary ? 24 : 40) {
                         ForEach(items) { item in
                             let key = item.seriesId ?? item.id
-                            let count = episodeCounts[key] ?? 1
+                            // Use actual unplayed count from series (nil means no unwatched or not a series)
+                            let unplayedCount = episodeCounts[key]
                             MediaPosterButton(
                                 item: item,
                                 libraryType: library.collectionType,
                                 libraryName: library.name,
                                 isLandscape: isYouTubeLibrary,
-                                badgeCount: count > 1 ? count : nil
+                                badgeCount: (unplayedCount ?? 0) > 1 ? unplayedCount : nil
                             ) {
                                 onSelect(item)
                             }
@@ -574,9 +580,13 @@ struct RecentlyAddedLibraryRow: View {
                 collectionType: library.collectionType,
                 isYouTubeLibrary: isYouTubeLibrary
             )
-            let (dedupedItems, counts) = deduplicateBySeries(latestItems)
+            let dedupedItems = deduplicateBySeries(latestItems)
             items = dedupedItems
-            episodeCounts = counts
+
+            // Fetch actual unplayed counts from series (for TV shows)
+            if isTVLibrary {
+                await loadUnplayedCounts(for: dedupedItems)
+            }
         } catch is CancellationError {
             // Ignore cancellation errors - expected during navigation
         } catch {
@@ -586,27 +596,51 @@ struct RecentlyAddedLibraryRow: View {
         isLoading = false
     }
 
-    private func deduplicateBySeries(_ items: [BaseItemDto]) -> (items: [BaseItemDto], counts: [String: Int]) {
+    private func loadUnplayedCounts(for items: [BaseItemDto]) async {
         var counts: [String: Int] = [:]
+
+        // Collect unique series IDs (handles both regular TV episodes and YouTube videos)
+        let seriesIds = Set(items.compactMap { item -> String? in
+            if item.type == .episode { return item.seriesId }
+            if item.type == .video { return item.seriesId }
+            if item.type == .series { return item.id }
+            return nil
+        })
+
+        // Fetch each series to get its unplayed count
+        for seriesId in seriesIds {
+            do {
+                let series = try await JellyfinClient.shared.getItem(itemId: seriesId)
+                if let unplayedCount = series.userData?.unplayedItemCount, unplayedCount > 0 {
+                    counts[seriesId] = unplayedCount
+                }
+            } catch {
+                // Ignore errors for individual series
+            }
+        }
+
+        episodeCounts = counts
+    }
+
+    private func deduplicateBySeries(_ items: [BaseItemDto]) -> [BaseItemDto] {
         var seen = Set<String>()
         var result: [BaseItemDto] = []
 
-        // First pass: count episodes per series
         for item in items {
-            let key = item.type == .episode ? (item.seriesId ?? item.id) : item.id
-            counts[key, default: 0] += 1
-        }
-
-        // Second pass: deduplicate
-        for item in items {
-            let key = item.type == .episode ? (item.seriesId ?? item.id) : item.id
+            // Group episodes and videos by their series
+            let key: String
+            if item.type == .episode || item.type == .video {
+                key = item.seriesId ?? item.id
+            } else {
+                key = item.id
+            }
             if !seen.contains(key) {
                 seen.insert(key)
                 result.append(item)
             }
         }
 
-        return (Array(result.prefix(20)), counts)
+        return Array(result.prefix(20))
     }
 }
 
