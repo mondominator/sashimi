@@ -11,8 +11,8 @@ struct AppHeader: View {
             Image("Logo")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(height: 270)
-                .padding(.top, -45)
+                .frame(height: 220)
+                .padding(.top, -25)
 
             Spacer()
 

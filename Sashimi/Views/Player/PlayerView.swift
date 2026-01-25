@@ -264,7 +264,7 @@ struct PlayerView: View {
     private func resetAutoHide() {
         controlsHideTask?.cancel()
         controlsHideTask = Task {
-            try? await Task.sleep(for: .seconds(4))
+            try? await Task.sleep(for: .seconds(7))
             if !Task.isCancelled && activeOverlay == nil {
                 hideControls()
             }

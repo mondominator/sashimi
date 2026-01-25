@@ -25,6 +25,18 @@ struct PlayerInfoOverlay: View {
     
     private let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
+    // Check if this is a YouTube episode (from YouTube library)
+    private var isYouTubeEpisode: Bool {
+        guard item.type == .episode else { return false }
+        // Check path for youtube
+        if item.path?.lowercased().contains("youtube") == true { return true }
+        // Check if season/episode numbers are very large (YouTube uses dates)
+        if let season = item.parentIndexNumber, let episode = item.indexNumber {
+            if season > 2100 || episode > 1000 { return true }
+        }
+        return false
+    }
+    
     private var displayProgress: Double {
         guard duration > 0 else { return 0 }
         let time = (isScrubbing && didScrub) ? scrubTime : currentTime
@@ -39,8 +51,8 @@ struct PlayerInfoOverlay: View {
         ZStack {
             // Gradient overlays
             VStack(spacing: 0) {
-                LinearGradient(colors: [.black.opacity(0.85), .black.opacity(0.4), .clear], startPoint: .top, endPoint: .bottom)
-                    .frame(height: 280)
+                LinearGradient(colors: [.black.opacity(0.95), .black.opacity(0.85), .black.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 350)
                 Spacer()
                 LinearGradient(colors: [.clear, .black.opacity(0.5), .black.opacity(0.9)], startPoint: .top, endPoint: .bottom)
                     .frame(height: 300)
@@ -84,46 +96,125 @@ struct PlayerInfoOverlay: View {
 
     private var topInfoBar: some View {
         HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 10) {
-                if let seriesName = item.seriesName {
-                    Text(seriesName).font(.system(size: 30, weight: .medium)).foregroundStyle(.white.opacity(0.8))
+            VStack(alignment: .leading, spacing: 12) {
+                // Series logo (for episodes) or circular channel art (for YouTube)
+                if item.type == .episode, let seriesId = item.seriesId {
+                    if isYouTubeEpisode {
+                        // YouTube: circular channel art with channel name
+                        HStack(spacing: 20) {
+                            Circle()
+                                .fill(Color.white.opacity(0.1))
+                                .frame(width: 100, height: 100)
+                                .overlay(
+                                    AsyncItemImage(
+                                        itemId: seriesId,
+                                        imageType: "Primary",
+                                        maxWidth: 200,
+                                        contentMode: .fill,
+                                        fallbackImageTypes: ["Thumb"]
+                                    )
+                                    .clipShape(Circle())
+                                )
+                            
+                            if let seriesName = item.seriesName {
+                                Text(seriesName)
+                                    .font(.system(size: 32, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.9))
+                            }
+                        }
+                    } else {
+                        // Regular TV: series logo
+                        AsyncItemImage(
+                            itemId: seriesId,
+                            imageType: "Logo",
+                            maxWidth: 1000,
+                            contentMode: .fit,
+                            fallbackImageTypes: []
+                        )
+                        .frame(maxHeight: 140, alignment: .leading)
+                        .frame(maxWidth: 600, alignment: .leading)
+                        .clipped()
+                    }
                 }
-                HStack(spacing: 16) {
-                    Text(item.type == .episode ? item.name : item.displayTitle)
-                        .font(.system(size: 48, weight: .bold)).foregroundStyle(.white).lineLimit(1)
-
-                    if let season = item.parentIndexNumber, let episode = item.indexNumber {
-                        Text(String(format: "S%d · E%d", season, episode))
-                            .font(.system(size: 24, weight: .bold))
+                
+                // Title with S#:E# prefix for episodes (skip for YouTube)
+                HStack(spacing: 12) {
+                    if !isYouTubeEpisode, let season = item.parentIndexNumber, let episode = item.indexNumber {
+                        Text("S\(String(season)):E\(String(episode))")
+                            .font(.system(size: 42, weight: .bold))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 12).padding(.vertical, 5)
-                            .background(SashimiTheme.accent)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        Text("•")
+                            .font(.system(size: 42, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.5))
                     }
+                    Text(item.type == .episode ? item.name : item.displayTitle)
+                        .font(.system(size: 42, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
                 }
 
-                HStack(spacing: 8) {
-                    if let year = item.productionYear {
+                // Media info row with badges
+                HStack(spacing: 16) {
+                    if let dateStr = item.premiereDate {
+                        Text(formatPremiereDate(dateStr))
+                            .font(.system(size: 22, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.8))
+                    } else if let year = item.productionYear {
                         Text(String(year))
+                            .font(.system(size: 22, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.8))
                     }
+                    
                     if let runtime = item.runTimeTicks {
                         let mins = Int(runtime / 600_000_000)
                         Text("•")
+                            .foregroundStyle(.white.opacity(0.5))
                         Text(mins >= 60 ? "\(mins/60)h \(mins%60)m" : "\(mins) min")
+                            .font(.system(size: 22, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.8))
                     }
-                    if let rating = item.officialRating {
+                    
+                    // Community rating with TMDB logo
+                    if let score = item.communityRating, score > 0 {
                         Text("•")
-                        Text(rating).padding(.horizontal, 8).padding(.vertical, 3)
-                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.5), lineWidth: 1))
-                    }
-                    if let score = item.communityRating {
-                        Text("•")
-                        HStack(spacing: 4) {
-                            Image(systemName: "star.fill").foregroundStyle(.yellow)
+                            .foregroundStyle(.white.opacity(0.5))
+                        HStack(spacing: 8) {
+                            Image("TMDBLogo")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(height: 24)
                             Text(String(format: "%.1f", score))
+                                .font(.system(size: 22, weight: .bold))
                         }
+                        .foregroundStyle(.white)
                     }
-                }.font(.system(size: 24, weight: .medium)).foregroundStyle(.white.opacity(0.7))
+                    
+                    // Critic rating with tomato
+                    if let critic = item.criticRating {
+                        Text("•")
+                            .foregroundStyle(.white.opacity(0.5))
+                        HStack(spacing: 6) {
+                            Text("🍅")
+                                .font(.system(size: 20))
+                            Text("\(critic)%")
+                                .font(.system(size: 22, weight: .bold))
+                        }
+                        .foregroundStyle(.white)
+                    }
+                    
+                    // Advisory rating badge
+                    if let rating = item.officialRating {
+                        Text(rating)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(Color.white.opacity(0.5), lineWidth: 1.5)
+                            )
+                    }
+                }
             }
             Spacer()
         }
@@ -253,6 +344,29 @@ struct PlayerInfoOverlay: View {
         guard s.isFinite && s >= 0 else { return "0:00" }
         let t = Int(s), h = t / 3600, m = (t % 3600) / 60, sec = t % 60
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, sec) : String(format: "%d:%02d", m, sec)
+    }
+    
+    private func formatPremiereDate(_ dateString: String) -> String {
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        if let date = isoFormatter.date(from: dateString) {
+            let displayFormatter = DateFormatter()
+            displayFormatter.dateStyle = .long
+            displayFormatter.timeStyle = .none
+            return displayFormatter.string(from: date)
+        }
+        
+        // Fallback: try without fractional seconds
+        isoFormatter.formatOptions = [.withInternetDateTime]
+        if let date = isoFormatter.date(from: dateString) {
+            let displayFormatter = DateFormatter()
+            displayFormatter.dateStyle = .long
+            displayFormatter.timeStyle = .none
+            return displayFormatter.string(from: date)
+        }
+        
+        return dateString
     }
 }
 

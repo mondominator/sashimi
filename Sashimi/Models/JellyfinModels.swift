@@ -36,6 +36,16 @@ struct UserDto: Codable, Identifiable {
     }
 }
 
+struct MediaUrl: Codable, Hashable {
+    let name: String?
+    let url: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case name = "Name"
+        case url = "Url"
+    }
+}
+
 struct BaseItemDto: Codable, Identifiable, Hashable {
     let id: String
     let name: String
@@ -64,6 +74,7 @@ struct BaseItemDto: Codable, Identifiable, Hashable {
     let premiereDate: String?
     let chapters: [ChapterInfo]?
     let path: String?
+    let remoteTrailers: [MediaUrl]?
 
     enum CodingKeys: String, CodingKey {
         case id = "Id"
@@ -93,6 +104,7 @@ struct BaseItemDto: Codable, Identifiable, Hashable {
         case premiereDate = "PremiereDate"
         case chapters = "Chapters"
         case path = "Path"
+        case remoteTrailers = "RemoteTrailers"
     }
 
     func hash(into hasher: inout Hasher) {

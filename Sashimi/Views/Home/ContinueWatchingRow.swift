@@ -146,10 +146,13 @@ struct ContinueWatchingCard: View {
                     .foregroundStyle(SashimiTheme.textPrimary)
 
                     if item.type == .episode {
-                        Text(episodeInfoString)
-                            .font(.system(size: 20))
-                            .foregroundStyle(SashimiTheme.textSecondary)
-                            .lineLimit(1)
+                        MarqueeText(
+                            text: episodeInfoString,
+                            isScrolling: isFocused,
+                            height: 26
+                        )
+                        .font(.system(size: 20))
+                        .foregroundStyle(SashimiTheme.textSecondary)
                     } else if let year = item.productionYear {
                         Text(String(year))
                             .font(.system(size: 20))
