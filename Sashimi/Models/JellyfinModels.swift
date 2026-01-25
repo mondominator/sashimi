@@ -1,5 +1,17 @@
 import Foundation
 
+// MARK: - String Extensions
+
+extension String {
+    /// Cleans up YouTube channel titles by removing common suffixes like " - Videos"
+    var cleanedYouTubeTitle: String {
+        if hasSuffix(" - Videos") {
+            return String(dropLast(9))
+        }
+        return self
+    }
+}
+
 // swiftlint:disable discouraged_optional_boolean
 // Jellyfin API models use optional booleans - this matches the server response structure
 
@@ -39,7 +51,7 @@ struct UserDto: Codable, Identifiable {
 struct MediaUrl: Codable, Hashable {
     let name: String?
     let url: String?
-    
+
     enum CodingKeys: String, CodingKey {
         case name = "Name"
         case url = "Url"

@@ -62,20 +62,37 @@ struct MediaPosterButton: View {
         case .movie:
             return item.name
         case .series:
-            return item.name
+            return item.name.cleanedYouTubeTitle
         case .episode:
-            return item.seriesName ?? item.name
+            return (item.seriesName ?? item.name).cleanedYouTubeTitle
         default:
             return item.name
         }
     }
 
     private var subtitleText: String? {
-        if isLandscape, item.type == .episode {
-            // Show channel/series name for YouTube videos
-            return item.seriesName
+        // No subtitle for landscape (YouTube) - title only
+        if isLandscape {
+            return nil
         }
         return nil
+    }
+
+    private func formatDate(_ isoDate: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: isoDate) {
+            let displayFormatter = DateFormatter()
+            displayFormatter.dateFormat = "M-d-yyyy"
+            return displayFormatter.string(from: date)
+        }
+        formatter.formatOptions = [.withInternetDateTime]
+        if let date = formatter.date(from: isoDate) {
+            let displayFormatter = DateFormatter()
+            displayFormatter.dateFormat = "M-d-yyyy"
+            return displayFormatter.string(from: date)
+        }
+        return ""
     }
 
     // Fallback image IDs
@@ -174,38 +191,38 @@ struct MediaPosterButton: View {
                         )
                         .frame(width: cardWidth, height: cardHeight)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
 
-                    // Watched indicator (small corner checkmark)
-                    if item.userData?.played == true {
-                        VStack {
-                            HStack {
+                        // Watched indicator (small corner checkmark) - inside for non-circular
+                        if item.userData?.played == true {
+                            VStack {
+                                HStack {
+                                    Spacer()
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 29))
+                                        .symbolRenderingMode(.palette)
+                                        .foregroundStyle(.black, Color(red: 0.29, green: 0.73, blue: 0.47))
+                                        .padding(6)
+                                }
                                 Spacer()
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 29))
-                                    .symbolRenderingMode(.palette)
-                                    .foregroundStyle(.black, Color(red: 0.29, green: 0.73, blue: 0.47))
-                                    .padding(6)
                             }
-                            Spacer()
                         }
-                    }
 
-                    // "X new" badge for multiple episodes
-                    if let count = badgeCount, count > 1 {
-                        VStack {
-                            HStack {
+                        // "X new" badge for multiple episodes
+                        if let count = badgeCount, count > 1 {
+                            VStack {
+                                HStack {
+                                    Spacer()
+                                    Text("\(count) new")
+                                        .font(.system(size: 19, weight: .bold))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 11)
+                                        .padding(.vertical, 5)
+                                        .background(Color(red: 0.29, green: 0.55, blue: 0.73))
+                                        .clipShape(Capsule())
+                                        .padding(9)
+                                }
                                 Spacer()
-                                Text("\(count) new")
-                                    .font(.system(size: 19, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 11)
-                                    .padding(.vertical, 5)
-                                    .background(Color(red: 0.29, green: 0.55, blue: 0.73))
-                                    .clipShape(Capsule())
-                                    .padding(9)
                             }
-                            Spacer()
                         }
                     }
 
@@ -224,6 +241,16 @@ struct MediaPosterButton: View {
                 }
                 .frame(width: cardWidth, height: cardHeight)
                 .clipShape(isCircular ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 12)))
+                // Watched indicator for circular images - outside the clip
+                .overlay(alignment: .topTrailing) {
+                    if isCircular && item.userData?.played == true {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 26))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.black, Color(red: 0.29, green: 0.73, blue: 0.47))
+                            .offset(x: -8, y: 8)
+                    }
+                }
                 .overlay(
                     Group {
                         if isCircular {
@@ -374,9 +401,9 @@ struct MarqueeText: View {
                 .onChange(of: isScrolling) { _, scrolling in
                     // Skip animation if Reduce Motion is enabled
                     guard !reduceMotion else { return }
-                    
+
                     animationTask?.cancel()
-                    
+
                     if scrolling && needsScroll {
                         if pingPong {
                             animationTask = Task {
@@ -398,23 +425,23 @@ struct MarqueeText: View {
         .frame(height: height)
         .clipped()
     }
-    
+
     @MainActor
     private func startPingPongAnimation() async {
         // Initial delay
         try? await Task.sleep(for: .milliseconds(Int(startDelay * 1000)))
-        
+
         while !Task.isCancelled {
             let duration = Double(scrollAmount) / 30
-            
+
             // Scroll left
             withAnimation(.linear(duration: duration)) {
                 offset = -scrollAmount
             }
             try? await Task.sleep(for: .milliseconds(Int(duration * 1000) + 800))
-            
+
             guard !Task.isCancelled else { break }
-            
+
             // Scroll right (back)
             withAnimation(.linear(duration: duration)) {
                 offset = 0

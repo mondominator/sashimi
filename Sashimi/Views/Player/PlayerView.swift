@@ -243,8 +243,7 @@ struct PlayerView: View {
 
     private func togglePlayPause() {
         guard let player = viewModel.player else { return }
-        if player.timeControlStatus == .playing { player.pause() }
-        else { player.rate = currentSpeed }
+        if player.timeControlStatus == .playing { player.pause() } else { player.rate = currentSpeed }
     }
 
     private func seekTo(_ time: Double) {
@@ -291,10 +290,10 @@ struct InvisibleButtonStyle: ButtonStyle {
 
 struct PickerRow: View {
     let title: String
-    var subtitle: String? = nil
+    var subtitle: String?
     var isSelected: Bool = false
     var isFirstItem: Bool = false
-    var onExit: (() -> Void)? = nil
+    var onExit: (() -> Void)?
     let action: () -> Void
 
     @FocusState private var isFocused: Bool
@@ -397,5 +396,5 @@ class PlayerUIView: UIView {
     override static var layerClass: AnyClass { AVPlayerLayer.self }
     init(player: AVPlayer) { super.init(frame: .zero); self.player = player; playerLayer.videoGravity = .resizeAspect }
     override init(frame: CGRect) { super.init(frame: frame); playerLayer.videoGravity = .resizeAspect }
-    required init?(coder: NSCoder) { fatalError() }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 }

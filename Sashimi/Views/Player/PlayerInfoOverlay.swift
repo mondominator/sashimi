@@ -2,6 +2,9 @@ import SwiftUI
 import AVFoundation
 import Combine
 
+// swiftlint:disable type_body_length
+// PlayerInfoOverlay is a single cohesive overlay view for video player controls
+
 struct PlayerInfoOverlay: View {
     let item: BaseItemDto
     @ObservedObject var viewModel: PlayerViewModel
@@ -20,9 +23,9 @@ struct PlayerInfoOverlay: View {
     @State private var isScrubbing = false
     @State private var scrubTime: Double = 0
     @State private var didScrub = false
-    
+
     @FocusState private var focusedControl: PlayerControl?
-    
+
     private let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     // Check if this is a YouTube episode (from YouTube library)
@@ -36,7 +39,7 @@ struct PlayerInfoOverlay: View {
         }
         return false
     }
-    
+
     private var displayProgress: Double {
         guard duration > 0 else { return 0 }
         let time = (isScrubbing && didScrub) ? scrubTime : currentTime
@@ -78,14 +81,14 @@ struct PlayerInfoOverlay: View {
             onExit?()
         }
     }
-    
+
     private func updateTime() {
         guard let player = viewModel.player else { return }
-        
+
         if let d = player.currentItem?.duration, d.isNumeric, d.seconds > 0 {
             duration = d.seconds
         }
-        
+
         if !isScrubbing || !didScrub {
             let time = player.currentTime().seconds
             if time.isFinite && time >= 0 {
@@ -115,7 +118,7 @@ struct PlayerInfoOverlay: View {
                                     )
                                     .clipShape(Circle())
                                 )
-                            
+
                             if let seriesName = item.seriesName {
                                 Text(seriesName)
                                     .font(.system(size: 32, weight: .semibold))
@@ -136,7 +139,7 @@ struct PlayerInfoOverlay: View {
                         .clipped()
                     }
                 }
-                
+
                 // Title with S#:E# prefix for episodes (skip for YouTube)
                 HStack(spacing: 12) {
                     if !isYouTubeEpisode, let season = item.parentIndexNumber, let episode = item.indexNumber {
@@ -164,7 +167,7 @@ struct PlayerInfoOverlay: View {
                             .font(.system(size: 22, weight: .medium))
                             .foregroundStyle(.white.opacity(0.8))
                     }
-                    
+
                     if let runtime = item.runTimeTicks {
                         let mins = Int(runtime / 600_000_000)
                         Text("•")
@@ -173,7 +176,7 @@ struct PlayerInfoOverlay: View {
                             .font(.system(size: 22, weight: .medium))
                             .foregroundStyle(.white.opacity(0.8))
                     }
-                    
+
                     // Community rating with TMDB logo
                     if let score = item.communityRating, score > 0 {
                         Text("•")
@@ -188,7 +191,7 @@ struct PlayerInfoOverlay: View {
                         }
                         .foregroundStyle(.white)
                     }
-                    
+
                     // Critic rating with tomato
                     if let critic = item.criticRating {
                         Text("•")
@@ -201,7 +204,7 @@ struct PlayerInfoOverlay: View {
                         }
                         .foregroundStyle(.white)
                     }
-                    
+
                     // Advisory rating badge
                     if let rating = item.officialRating {
                         Text(rating)
@@ -294,13 +297,13 @@ struct PlayerInfoOverlay: View {
                         onUserInteraction?()
                     }
                     .focused($focusedControl, equals: .rewind)
-                    
+
                     TVControlButton(icon: isPlaying ? "pause.fill" : "play.fill", size: 40, isFocused: focusedControl == .playPause) {
                         onPlayPause?()
                         onUserInteraction?()
                     }
                     .focused($focusedControl, equals: .playPause)
-                    
+
                     TVControlButton(icon: "goforward.10", isFocused: focusedControl == .forward) {
                         if duration > 0 { onSeek?(min(duration, currentTime + 10)) }
                         onUserInteraction?()
@@ -316,19 +319,19 @@ struct PlayerInfoOverlay: View {
                         onShowSubtitles?()
                     }
                     .focused($focusedControl, equals: .subtitles)
-                    
+
                     if let chapters = item.chapters, !chapters.isEmpty {
                         TVControlButton(icon: "list.bullet", isFocused: focusedControl == .chapters) {
                             onShowChapters?()
                         }
                         .focused($focusedControl, equals: .chapters)
                     }
-                    
+
                     TVControlButton(icon: "speedometer", isFocused: focusedControl == .speed) {
                         onShowSpeed?()
                     }
                     .focused($focusedControl, equals: .speed)
-                    
+
                     if onShowQuality != nil {
                         TVControlButton(icon: "gearshape", isFocused: focusedControl == .quality) {
                             onShowQuality?()
@@ -345,18 +348,18 @@ struct PlayerInfoOverlay: View {
         let t = Int(s), h = t / 3600, m = (t % 3600) / 60, sec = t % 60
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, sec) : String(format: "%d:%02d", m, sec)
     }
-    
+
     private func formatPremiereDate(_ dateString: String) -> String {
         let isoFormatter = ISO8601DateFormatter()
         isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        
+
         if let date = isoFormatter.date(from: dateString) {
             let displayFormatter = DateFormatter()
             displayFormatter.dateStyle = .long
             displayFormatter.timeStyle = .none
             return displayFormatter.string(from: date)
         }
-        
+
         // Fallback: try without fractional seconds
         isoFormatter.formatOptions = [.withInternetDateTime]
         if let date = isoFormatter.date(from: dateString) {
@@ -365,7 +368,7 @@ struct PlayerInfoOverlay: View {
             displayFormatter.timeStyle = .none
             return displayFormatter.string(from: date)
         }
-        
+
         return dateString
     }
 }
@@ -378,7 +381,7 @@ struct ProgressBarButton: View {
     let chapters: [ChapterInfo]?
     let totalTicks: Int64?
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             GeometryReader { geo in
@@ -386,7 +389,7 @@ struct ProgressBarButton: View {
                     // Background track
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color.white.opacity(0.3))
-                    
+
                     // Progress fill
                     RoundedRectangle(cornerRadius: 4)
                         .fill(SashimiTheme.accent)
@@ -421,7 +424,7 @@ struct ProgressBarButton: View {
 
 struct TVProgressBarStyle: ButtonStyle {
     let isFocused: Bool
-    
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .opacity(configuration.isPressed ? 0.8 : 1.0)

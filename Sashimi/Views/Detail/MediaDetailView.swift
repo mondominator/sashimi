@@ -1,5 +1,8 @@
 import SwiftUI
 import AVKit
+import os
+
+private let trailerLogger = Logger(subsystem: "com.mondominator.sashimi", category: "Trailer")
 
 // swiftlint:disable type_body_length file_length
 // MediaDetailView is a complex view handling movies, series, seasons, and episodes
@@ -69,7 +72,7 @@ struct MediaDetailView: View {
     private var isYouTubeSeriesStyle: Bool {
         isSeries && forceYouTubeStyle
     }
-    
+
     // Episode from YouTube library - show circular channel art instead of series logo
     private var isYouTubeChannelEpisode: Bool {
         isEpisode && (forceYouTubeStyle || (item.path?.lowercased().contains("youtube") ?? false))
@@ -91,21 +94,19 @@ struct MediaDetailView: View {
         return false
     }
 
-    // For backdrop: use series backdrop if available, otherwise episode's thumbnail
+    // For backdrop: episodes use their own thumbnail, others use backdrop
     private var backdropId: String {
-        if isEpisode && seriesHasBackdrop {
-            return item.seriesId ?? item.id
-        }
         return item.id
     }
 
-    // Use Backdrop if series has it, otherwise Primary (thumbnail)
+    // Episodes use Primary (thumbnail), others use Backdrop
+    // YouTube channels from Pinchflat have Banner images instead of Backdrop
     private var backdropImageType: String {
-        if isEpisode && seriesHasBackdrop {
-            return "Backdrop"
-        }
         if isEpisode || isVideo {
             return "Primary"
+        }
+        if isYouTubeSeriesStyle {
+            return "Banner"
         }
         return "Backdrop"
     }
@@ -118,42 +119,68 @@ struct MediaDetailView: View {
             }
         }
         .background {
-            ZStack {
-                // Full-screen background image
-                AsyncItemImage(
-                    itemId: backdropId,
-                    imageType: backdropImageType,
-                    maxWidth: 1920,
-                    contentMode: .fill,
-                    fallbackImageTypes: ["Thumb", "Backdrop", "Primary"]
-                )
-                .id(refreshID)
-                .ignoresSafeArea()
+            GeometryReader { geometry in
+                ZStack {
+                    // Dark background base
+                    SashimiTheme.background
+                        .ignoresSafeArea()
 
-                // Gradient overlays for readability
-                LinearGradient(
-                    colors: [
-                        SashimiTheme.background.opacity(0.55),
-                        SashimiTheme.background.opacity(0.85),
-                        SashimiTheme.background.opacity(0.98),
-                        SashimiTheme.background
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
+                    // Background image - top right (Plex-style)
+                    VStack(spacing: 0) {
+                        Spacer().frame(height: 80)
+                        HStack {
+                            Spacer()
+                            AsyncItemImage(
+                                itemId: backdropId,
+                                imageType: backdropImageType,
+                                maxWidth: 3840,
+                                contentMode: .fit,
+                                fallbackImageTypes: isYouTubeSeriesStyle ? ["Backdrop", "Thumb", "Primary"] : ["Thumb", "Backdrop", "Primary"]
+                            )
+                            .id(refreshID)
+                            .frame(width: geometry.size.width * (isYouTubeSeriesStyle ? 0.65 : (isSeries ? 0.55 : 0.45)), alignment: .topTrailing)
+                            // Soft edge gradients fading into background
+                            .mask(
+                                // Use a combined gradient mask for smooth edges on all sides
+                                LinearGradient(
+                                    colors: [.clear, .white, .white, .clear],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                                .mask(
+                                    LinearGradient(
+                                        colors: [.clear, .white, .white, .white],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .mask(
+                                    LinearGradient(
+                                        colors: [.white, .white, .white, .clear],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                            )
+                            .padding(.trailing, 140)
+                        }
+                        Spacer()
+                    }
+                    .ignoresSafeArea()
 
-                // Side vignette
-                HStack {
+                    // Subtle gradient for text readability (minimal to keep backdrop vibrant)
                     LinearGradient(
-                        colors: [SashimiTheme.background.opacity(0.9), .clear],
-                        startPoint: .leading,
-                        endPoint: .trailing
+                        colors: [
+                            SashimiTheme.background.opacity(0.0),
+                            SashimiTheme.background.opacity(0.05),
+                            SashimiTheme.background.opacity(0.3),
+                            SashimiTheme.background
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
                     )
-                    .frame(width: 500)
-                    Spacer()
+                    .ignoresSafeArea()
                 }
-                .ignoresSafeArea()
             }
         }
         .fullScreenCover(isPresented: $showingPlayer) {
@@ -178,14 +205,15 @@ struct MediaDetailView: View {
         } message: {
             Text("Are you sure you want to delete this item? This cannot be undone.")
         }
-        .sheet(isPresented: $showingTrailers) {
-            TrailerListView(trailers: item.remoteTrailers ?? [])
+        .fullScreenCover(isPresented: $showingTrailers) {
+            if let trailer = item.remoteTrailers?.first, let url = trailer.url {
+                TrailerPlayerView(urlString: url, name: trailer.name ?? "Trailer")
+            }
         }
         .task {
             await loadContent()
         }
         .onAppear {
-
             isWatched = item.userData?.played ?? false
             hasProgress = item.progressPercent > 0
         }
@@ -313,9 +341,9 @@ struct MediaDetailView: View {
                                 )
                                 .clipShape(Circle())
                             )
-                        
+
                         if let seriesName = item.seriesName {
-                            Text(seriesName)
+                            Text(seriesName.cleanedYouTubeTitle)
                                 .font(.system(size: 28, weight: .semibold))
                                 .foregroundStyle(SashimiTheme.textSecondary)
                         }
@@ -341,7 +369,7 @@ struct MediaDetailView: View {
                         .foregroundStyle(SashimiTheme.textSecondary)
                 }
             }
-            
+
             infoSection
         }
     }
@@ -350,26 +378,8 @@ struct MediaDetailView: View {
     private var seriesHeaderSection: some View {
         VStack(alignment: .leading, spacing: 20) {
             if isYouTubeSeriesStyle {
-                // YouTube channel: circular art with name
-                HStack(spacing: 30) {
-                    Circle()
-                        .fill(SashimiTheme.cardBackground)
-                        .frame(width: 120, height: 120)
-                        .overlay(
-                            AsyncItemImage(
-                                itemId: item.id,
-                                imageType: "Primary",
-                                maxWidth: 240,
-                                contentMode: .fill,
-                                fallbackImageTypes: ["Thumb"]
-                            )
-                            .clipShape(Circle())
-                        )
-                    
-                    Text(item.name)
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(SashimiTheme.textSecondary)
-                }
+                // YouTube channel: logo is shown inline with title in infoSection
+                EmptyView()
             } else {
                 // Regular series: logo
                 AsyncItemImage(
@@ -383,7 +393,7 @@ struct MediaDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .clipped()
             }
-            
+
             infoSection
         }
     }
@@ -479,6 +489,26 @@ struct MediaDetailView: View {
                         .font(.system(size: 38, weight: .bold))
                         .foregroundStyle(SashimiTheme.textPrimary)
                 }
+            } else if isYouTubeSeriesStyle {
+                // YouTube series: circular logo before title
+                HStack(spacing: 20) {
+                    Circle()
+                        .fill(SashimiTheme.cardBackground)
+                        .frame(width: 60, height: 60)
+                        .overlay(
+                            AsyncItemImage(
+                                itemId: item.id,
+                                imageType: "Primary",
+                                maxWidth: 120,
+                                contentMode: .fill,
+                                fallbackImageTypes: ["Thumb"]
+                            )
+                            .clipShape(Circle())
+                        )
+                    Text(item.name.cleanedYouTubeTitle)
+                        .font(.system(size: 38, weight: .bold))
+                        .foregroundStyle(SashimiTheme.textPrimary)
+                }
             } else {
                 Text(item.name)
                     .font(.system(size: 38, weight: .bold))
@@ -530,7 +560,7 @@ struct MediaDetailView: View {
                 if !isSeries {
                     ratingsRow
                 }
-                
+
                 if let info = mediaInfo {
                     if let resolution = info.videoResolution {
                         mediaInfoBadge(resolution)
@@ -695,7 +725,7 @@ struct MediaDetailView: View {
         // Use series ratings as fallback for episodes
         let communityRating = item.communityRating ?? seriesCommunityRating
         let criticRating = item.criticRating ?? seriesCriticRating
-        let hasCommunityRating = communityRating != nil && communityRating! > 0
+        let hasCommunityRating = (communityRating ?? 0) > 0
         let hasCriticRating = criticRating != nil
 
         if hasCommunityRating || hasCriticRating {
@@ -742,7 +772,7 @@ struct MediaDetailView: View {
                     showingPlayer = true
                 }
             }
-            
+
             // Non-series: show regular play buttons
             if !isSeries {
                 ActionButton(
@@ -766,10 +796,10 @@ struct MediaDetailView: View {
                 }
             }
 
-            // Trailers button for movies with trailers
+            // Trailer button for movies with trailers
             if !isSeries && !isEpisode, let trailers = item.remoteTrailers, !trailers.isEmpty {
                 ActionButton(
-                    title: "Trailers",
+                    title: "Trailer",
                     icon: "film",
                     isPrimary: false
                 ) {
@@ -1078,7 +1108,7 @@ struct MediaDetailView: View {
     private func scrollToCurrentEpisode(proxy: ScrollViewProxy) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             withAnimation(.easeInOut(duration: 0.3)) {
-                proxy.scrollTo(item.id, anchor: UnitPoint(x: -0.1, y: 0.5))
+                proxy.scrollTo(item.id, anchor: .leading)
             }
         }
     }
@@ -1119,7 +1149,7 @@ struct MediaDetailView: View {
             seasons = try await JellyfinClient.shared.getSeasons(seriesId: item.id)
             // Find next episode to play first (from NextUp API)
             await findNextEpisodeToPlay()
-            
+
             // Select the season containing the next episode, or first season as fallback
             if let nextEp = nextEpisodeToPlay, let seasonId = nextEp.seasonId {
                 selectedSeason = seasons.first { $0.id == seasonId }
@@ -1134,7 +1164,7 @@ struct MediaDetailView: View {
             ToastManager.shared.show("Failed to load series content")
         }
     }
-    
+
     private func findNextEpisodeToPlay() async {
         do {
             let nextUpItems = try await JellyfinClient.shared.getNextUp(limit: 50)
@@ -1313,14 +1343,20 @@ struct CastCard: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        Button(action: {}) {
+        Button {
+            // No action - cast cards are display only
+        } label: {
             VStack(spacing: 8) {
                 if person.primaryImageTag != nil {
-                    AsyncImage(url: JellyfinClient.shared.personImageURL(personId: person.id, maxWidth: 200)) { image in
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Circle().fill(SashimiTheme.cardBackground)
-                    }
+                    AsyncImage(
+                        url: JellyfinClient.shared.personImageURL(personId: person.id, maxWidth: 200),
+                        content: { image in
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        },
+                        placeholder: {
+                            Circle().fill(SashimiTheme.cardBackground)
+                        }
+                    )
                     .frame(width: 100, height: 100)
                     .clipShape(Circle())
                     .overlay(
@@ -1371,7 +1407,7 @@ struct CastCard: View {
         .buttonStyle(PlainNoHighlightButtonStyle())
         .focused($isFocused)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(person.role != nil ? "\(person.name) as \(person.role!)" : person.name)
+        .accessibilityLabel(person.role.map { "\(person.name) as \($0)" } ?? person.name)
     }
 }
 
@@ -1503,17 +1539,17 @@ struct EpisodeCard: View {
 struct TrailerListView: View {
     let trailers: [MediaUrl]
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         ZStack {
             Color.black.opacity(0.95).ignoresSafeArea()
-            
+
             VStack(spacing: 20) {
                 Text("Trailers")
                     .font(.title3)
                     .foregroundStyle(.white)
                     .padding(.top, 50)
-                
+
                 ScrollView {
                     VStack(spacing: 8) {
                         ForEach(Array(trailers.enumerated()), id: \.offset) { index, trailer in
@@ -1525,7 +1561,7 @@ struct TrailerListView: View {
                     }
                     .padding(.horizontal, 100)
                 }
-                
+
                 Button("Close") {
                     dismiss()
                 }
@@ -1540,7 +1576,7 @@ struct TrailerRow: View {
     let url: String?
     @FocusState private var isFocused: Bool
     @State private var showingPlayer = false
-    
+
     var body: some View {
         Button {
             showingPlayer = true
@@ -1549,11 +1585,11 @@ struct TrailerRow: View {
                 Image(systemName: "play.circle.fill")
                     .font(.title3)
                     .foregroundStyle(isFocused ? .white : .gray)
-                
+
                 Text(name)
                     .font(.body)
                     .foregroundStyle(.white)
-                
+
                 Spacer()
             }
             .padding(.horizontal, 20)
@@ -1578,7 +1614,8 @@ struct TrailerPlayerView: View {
     @State private var player: AVPlayer?
     @State private var isLoading = true
     @State private var errorMessage: String?
-    
+    @State private var showYouTubePrompt = false
+
     private var youtubeVideoId: String? {
         if urlString.contains("youtube.com/watch") {
             return URLComponents(string: urlString)?.queryItems?.first(where: { $0.name == "v" })?.value
@@ -1587,12 +1624,42 @@ struct TrailerPlayerView: View {
         }
         return nil
     }
-    
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            
-            if isLoading {
+
+            if showYouTubePrompt, let videoId = youtubeVideoId {
+                // YouTube video - prompt to open in YouTube app
+                VStack(spacing: 30) {
+                    Image(systemName: "play.rectangle.fill")
+                        .font(.system(size: 80))
+                        .foregroundStyle(.red)
+
+                    Text("YouTube Trailer")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+
+                    Text("Open this trailer in the YouTube app?")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+
+                    HStack(spacing: 40) {
+                        Button("Open YouTube") {
+                            openInYouTubeApp(videoId: videoId)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+
+                        Button("Cancel") {
+                            dismiss()
+                        }
+                    }
+                    .padding(.top, 20)
+                }
+                .padding(60)
+            } else if isLoading {
                 VStack(spacing: 20) {
                     ProgressView()
                         .scaleEffect(1.5)
@@ -1626,91 +1693,51 @@ struct TrailerPlayerView: View {
             }
         }
         .onAppear {
-            loadTrailer()
+            if youtubeVideoId != nil {
+                // YouTube video - show prompt to open in YouTube app
+                showYouTubePrompt = true
+            } else {
+                loadDirectTrailer()
+            }
         }
         .onDisappear {
             player?.pause()
             player = nil
         }
     }
-    
-    private func loadTrailer() {
-        if let videoId = youtubeVideoId {
-            // Use Invidious API to get direct YouTube stream
-            fetchYouTubeStream(videoId: videoId)
-        } else if let url = URL(string: urlString) {
-            // Direct URL - play directly
+
+    private func loadDirectTrailer() {
+        trailerLogger.info("Loading direct trailer: \(urlString)")
+        if let url = URL(string: urlString) {
             isLoading = false
             player = AVPlayer(url: url)
             player?.play()
         } else {
+            trailerLogger.error("Invalid trailer URL: \(urlString)")
             isLoading = false
             errorMessage = "Invalid trailer URL"
         }
     }
-    
-    private func fetchYouTubeStream(videoId: String) {
-        // Try Piped instances (more reliable than Invidious)
-        let pipedInstances = [
-            "https://pipedapi.kavin.rocks",
-            "https://pipedapi.r4fo.com",
-            "https://pipedapi.darkness.services",
-            "https://pipedapi.drgns.space"
-        ]
-        
-        Task {
-            // Try Piped API first
-            for instance in pipedInstances {
-                if let streamURL = await tryPipedInstance(instance, videoId: videoId) {
-                    await MainActor.run {
-                        isLoading = false
-                        player = AVPlayer(url: streamURL)
-                        player?.play()
+
+    private func openInYouTubeApp(videoId: String) {
+        // Try YouTube app URL scheme for tvOS
+        let youtubeAppURL = URL(string: "youtube://watch/\(videoId)")
+        let youtubeWebURL = URL(string: "https://www.youtube.com/watch?v=\(videoId)")
+
+        if let appURL = youtubeAppURL {
+            UIApplication.shared.open(appURL) { success in
+                if !success {
+                    trailerLogger.info("YouTube app not available, trying web URL")
+                    if let webURL = youtubeWebURL {
+                        UIApplication.shared.open(webURL) { webSuccess in
+                            if !webSuccess {
+                                trailerLogger.error("Could not open YouTube")
+                            }
+                        }
                     }
-                    return
                 }
-            }
-            
-            await MainActor.run {
-                isLoading = false
-                errorMessage = "Could not load trailer"
+                dismiss()
             }
         }
-    }
-    
-    private func tryPipedInstance(_ instance: String, videoId: String) async -> URL? {
-        guard let apiURL = URL(string: "\(instance)/streams/\(videoId)") else { return nil }
-        
-        var request = URLRequest(url: apiURL)
-        request.timeoutInterval = 15
-        
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else { return nil }
-            
-            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                // Try HLS URL first - works best with AVPlayer
-                if let hlsUrl = json["hls"] as? String, let url = URL(string: hlsUrl) {
-                    return url
-                }
-                
-                // Fallback to video streams
-                if let videoStreams = json["videoStreams"] as? [[String: Any]] {
-                    // Find stream with both video and audio (not videoOnly)
-                    let playableStreams = videoStreams.filter { 
-                        ($0["videoOnly"] as? Bool) != true
-                    }
-                    
-                    if let bestStream = playableStreams.first,
-                       let urlString = bestStream["url"] as? String,
-                       let url = URL(string: urlString) {
-                        return url
-                    }
-                }
-            }
-        } catch {
-            print("Piped error: \(error)")
-        }
-        return nil
     }
 }

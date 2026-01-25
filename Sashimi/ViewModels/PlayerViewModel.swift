@@ -2,6 +2,10 @@ import Foundation
 import AVKit
 import AVFoundation
 import Combine
+import MediaPlayer
+
+// swiftlint:disable file_length type_body_length function_body_length
+// PlayerViewModel manages complex video playback state - splitting would fragment playback logic
 
 extension Notification.Name {
     static let playbackDidEnd = Notification.Name("playbackDidEnd")
@@ -37,9 +41,9 @@ enum QualityOption: String, CaseIterable, Identifiable {
     case quality1080p = "1080"
     case quality720p = "720"
     case quality480p = "480"
-    
+
     var id: String { rawValue }
-    
+
     var displayName: String {
         switch self {
         case .auto: return "Auto"
@@ -48,7 +52,7 @@ enum QualityOption: String, CaseIterable, Identifiable {
         case .quality480p: return "480p"
         }
     }
-    
+
     var maxBitrate: Int? {
         switch self {
         case .auto: return nil  // No limit
@@ -161,6 +165,10 @@ final class PlayerViewModel: ObservableObject {
             player = AVPlayer(playerItem: playerItem)
             player?.volume = 1.0
             player?.isMuted = false
+
+            // Set up remote control commands for Bluetooth headsets/remotes
+            setupRemoteCommands()
+            updateNowPlayingInfo(item: freshItem)
 
             statusObserver = player?.observe(\.status) { [weak self] player, _ in
                 Task { @MainActor in
@@ -436,15 +444,12 @@ final class PlayerViewModel: ObservableObject {
             startProgressReporting()
             setupSegmentTracking()
             player?.play()
-
         } catch {
             self.error = error
             self.errorMessage = error.localizedDescription
             isLoading = false
         }
     }
-
-
 
     func stop() async {
         progressReportTask?.cancel()
@@ -470,7 +475,6 @@ final class PlayerViewModel: ObservableObject {
                 // Normal exit - report current position
                 positionTicks = Int64(currentTime.seconds * 10_000_000)
             }
-
 
             try? await client.reportPlaybackStopped(itemId: item.id, positionTicks: positionTicks)
         }
@@ -692,8 +696,94 @@ final class PlayerViewModel: ObservableObject {
         playerItem.navigationMarkerGroups = [markerGroup]
     }
 
+    // MARK: - Remote Control Commands (Bluetooth headsets)
+
+    private func setupRemoteCommands() {
+        let commandCenter = MPRemoteCommandCenter.shared()
+
+        // Play command
+        commandCenter.playCommand.isEnabled = true
+        commandCenter.playCommand.addTarget { [weak self] _ in
+            self?.player?.play()
+            return .success
+        }
+
+        // Pause command
+        commandCenter.pauseCommand.isEnabled = true
+        commandCenter.pauseCommand.addTarget { [weak self] _ in
+            self?.player?.pause()
+            return .success
+        }
+
+        // Toggle play/pause (what most Bluetooth headsets use)
+        commandCenter.togglePlayPauseCommand.isEnabled = true
+        commandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
+            guard let self = self, let player = self.player else { return .commandFailed }
+            if player.timeControlStatus == .playing {
+                player.pause()
+            } else {
+                player.play()
+            }
+            return .success
+        }
+
+        // Skip forward/backward
+        commandCenter.skipForwardCommand.isEnabled = true
+        commandCenter.skipForwardCommand.preferredIntervals = [15]
+        commandCenter.skipForwardCommand.addTarget { [weak self] _ in
+            guard let self = self, let player = self.player else { return .commandFailed }
+            let currentTime = player.currentTime().seconds
+            let newTime = currentTime + 15
+            player.seek(to: CMTime(seconds: newTime, preferredTimescale: 600))
+            return .success
+        }
+
+        commandCenter.skipBackwardCommand.isEnabled = true
+        commandCenter.skipBackwardCommand.preferredIntervals = [15]
+        commandCenter.skipBackwardCommand.addTarget { [weak self] _ in
+            guard let self = self, let player = self.player else { return .commandFailed }
+            let currentTime = player.currentTime().seconds
+            let newTime = max(0, currentTime - 15)
+            player.seek(to: CMTime(seconds: newTime, preferredTimescale: 600))
+            return .success
+        }
+    }
+
+    private func updateNowPlayingInfo(item: BaseItemDto) {
+        var nowPlayingInfo = [String: Any]()
+
+        nowPlayingInfo[MPMediaItemPropertyTitle] = item.name ?? "Unknown"
+
+        if let seriesName = item.seriesName {
+            nowPlayingInfo[MPMediaItemPropertyArtist] = seriesName
+        }
+
+        if let runTimeTicks = item.runTimeTicks {
+            nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = Double(runTimeTicks) / 10_000_000.0
+        }
+
+        if let playbackPositionTicks = item.userData?.playbackPositionTicks {
+            nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = Double(playbackPositionTicks) / 10_000_000.0
+        }
+
+        nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = 1.0
+
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+    }
+
+    private nonisolated func cleanupRemoteCommands() {
+        let commandCenter = MPRemoteCommandCenter.shared()
+        commandCenter.playCommand.removeTarget(nil)
+        commandCenter.pauseCommand.removeTarget(nil)
+        commandCenter.togglePlayPauseCommand.removeTarget(nil)
+        commandCenter.skipForwardCommand.removeTarget(nil)
+        commandCenter.skipBackwardCommand.removeTarget(nil)
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    }
+
     deinit {
         progressReportTask?.cancel()
+        cleanupRemoteCommands()
         if let endObserver {
             NotificationCenter.default.removeObserver(endObserver)
         }

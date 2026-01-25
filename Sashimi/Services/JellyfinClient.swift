@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-// swiftlint:disable type_body_length
+// swiftlint:disable type_body_length file_length
 // JellyfinClient handles all Jellyfin API endpoints - splitting would fragment the API layer
 
 // MARK: - Certificate Trust Settings
@@ -405,8 +405,11 @@ actor JellyfinClient {
         sortOrder: String = "Ascending",
         limit: Int = 100,
         startIndex: Int = 0,
+        // swiftlint:disable:next discouraged_optional_boolean
         isPlayed: Bool? = nil,
+        // swiftlint:disable:next discouraged_optional_boolean
         isFavorite: Bool? = nil,
+        // swiftlint:disable:next discouraged_optional_boolean
         isResumable: Bool? = nil
     ) async throws -> ItemsResponse {
         guard let userId else { throw JellyfinError.notConfigured }

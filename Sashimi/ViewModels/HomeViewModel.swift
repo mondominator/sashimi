@@ -15,13 +15,13 @@ final class HomeViewModel: ObservableObject {
 
     private let client = JellyfinClient.shared
     private let appGroupIdentifier = "group.com.mondominator.sashimi"
-    
+
     private let dateFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
-    
+
     private let dateFormatterNoFraction: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
@@ -156,31 +156,31 @@ final class HomeViewModel: ObservableObject {
         // Strategy: Merge using a two-pointer approach, comparing dates.
         // For Resume items: use their lastPlayedDate
         // For NextUp items: use current time based on position (trust the API order)
-        
+
         let now = Date()
-        
+
         // Get effective dates for Resume items
         let resumeDates: [Date] = resume.map { item in
             parseDate(item.userData?.lastPlayedDate) ?? now
         }
-        
+
         // For NextUp, assign dates based on position: first item = now, each subsequent = 1 second earlier
         // This trusts the NextUp API's sorting by series activity
-        let nextUpDates: [Date] = nextUp.enumerated().map { index, _ in
+        let nextUpDates: [Date] = nextUp.indices.map { index in
             now.addingTimeInterval(-Double(index))
         }
-        
+
         // Merge the two sorted lists
         var merged: [BaseItemDto] = []
         var seenSeriesIds = Set<String>()
         var seenIds = Set<String>()
-        
+
         var resumeIdx = 0
         var nextUpIdx = 0
-        
+
         while resumeIdx < resume.count || nextUpIdx < nextUp.count {
             let useResume: Bool
-            
+
             if resumeIdx >= resume.count {
                 useResume = false
             } else if nextUpIdx >= nextUp.count {
@@ -189,7 +189,7 @@ final class HomeViewModel: ObservableObject {
                 // Compare dates - take the more recent one
                 useResume = resumeDates[resumeIdx] >= nextUpDates[nextUpIdx]
             }
-            
+
             let item: BaseItemDto
             if useResume {
                 item = resume[resumeIdx]
@@ -198,25 +198,25 @@ final class HomeViewModel: ObservableObject {
                 item = nextUp[nextUpIdx]
                 nextUpIdx += 1
             }
-            
+
             // Skip duplicates
             guard !seenIds.contains(item.id) else { continue }
-            
+
             // Skip if we already have an item from this series
             if let seriesId = item.seriesId {
                 guard !seenSeriesIds.contains(seriesId) else { continue }
                 seenSeriesIds.insert(seriesId)
             }
-            
+
             seenIds.insert(item.id)
             merged.append(item)
-            
+
             if merged.count >= 20 { break }
         }
-        
+
         return merged
     }
-    
+
     private func parseDate(_ dateString: String?) -> Date? {
         guard let dateString else { return nil }
         if let date = dateFormatter.date(from: dateString) {
